@@ -1,4 +1,5 @@
 {
+    "type": "module",
     "dependencies": {
         "@opentelemetry/api": "^1.7.0",
         "@opentelemetry/sdk-trace-base": "^1.16.0",

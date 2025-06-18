@@ -42,7 +42,6 @@ describe('Cloud Probe Worker', () => {
     it('should return 200 with timestamp and cf info', async () => {
       const { req, ctx } = createRequest('GET', '/ping');
       req.cf = { colo: 'DFW', country: 'US' };
-
       const res = await worker.fetch(req, env, ctx);
 
       expect(res.status).toBe(200);
@@ -60,7 +59,6 @@ describe('Cloud Probe Worker', () => {
         country: 'US',
         colo: 'DFW'
       };
-
       const res = await worker.fetch(req, env, ctx);
 
       expect(res.status).toBe(200);
@@ -105,7 +103,6 @@ describe('Cloud Probe Worker', () => {
       const { req, ctx } = createRequest('GET', '/speed', {
         'x-api-probe-token': 'test-token'
       });
-
       const res = await worker.fetch(req, env, ctx);
 
       expect(res.status).toBe(200);
@@ -119,7 +116,6 @@ describe('Cloud Probe Worker', () => {
       const { req, ctx } = createRequest('GET', '/speed?size=100', {
         'x-api-probe-token': 'test-token'
       });
-
       const res = await worker.fetch(req, env, ctx);
 
       expect(res.status).toBe(200);
