@@ -86,3 +86,23 @@ Error responses follow the format:
    Generate a secure token, then:
    ```sh
    wrangler secret put API_PROBE_TOKEN
+   ```
+
+3. **Test Locally:**
+   Run the worker in development mode:
+   ```sh
+   wrangler dev
+   ```
+
+4. **Deploy:**
+   Publish the worker to Cloudflare:
+   ```sh
+   wrangler publish
+   ```
+
+## Usage
+
+After deployment, access the endpoints via your worker URL. For example:
+```sh
+curl https://<your-worker>.workers.dev/ping
+```
