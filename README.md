@@ -11,7 +11,9 @@ Global, serverless network probe endpoints—latency, jitter, speed test, and ed
 - **Speed Test**: Test download speeds with configurable file sizes
 - **Edge Metadata**: Get detailed information about the edge location and client
 - **Rate Limiting**: Built-in rate limiting for API protection
-- **OpenTelemetry Support**: Distributed tracing with traceparent header support
+- **OpenTelemetry Header Support**: Echoes the `traceparent` header for
+  distributed tracing. Spans are not exported unless you wire up an
+  OpenTelemetry exporter yourself.
 
 ## 🚀 Endpoints
 
@@ -55,9 +57,13 @@ All responses include the following security headers:
 ## 🔍 OpenTelemetry Support
 
 All endpoints support distributed tracing through the `traceparent` header:
-- Echoes back any received `traceparent` header in both response header and JSON
+- Echoes back any received `traceparent` header in both the response header and JSON
 - Follows the [W3C Trace Context](https://www.w3.org/TR/trace-context/) specification
 - Enables end-to-end request tracing across services
+
+This worker does **not** export spans by default. To send trace data to a
+backend, integrate an [OpenTelemetry exporter](https://developers.cloudflare.com/workers/observability/tracing/) or other tracing
+library in `src/index.js`.
 
 ## 📊 Response Format
 
