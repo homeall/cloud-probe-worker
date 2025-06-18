@@ -5,6 +5,62 @@ const GIT_COMMIT = "abcdef0";
 const BUILD_TIME = "2024-06-15";
 const MAX_SIZE = 100 * 1024 * 1024; // 100MB
 
+/**
+ * Add security headers to all responses
+ * @param {Headers} headers - The headers object to modify
+ * @returns {Headers} The modified headers object
+ */
+function addSecurityHeaders(headers) {
+  // Force HTTPS for 2 years including subdomains and preload
+  headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  // Prevent MIME type sniffing
+  headers.set("X-Content-Type-Options", "nosniff");
+  // Prevent clickjacking
+  headers.set("X-Frame-Options", "DENY");
+  // Control referrer information
+  headers.set("Referrer-Policy", "no-referrer");
+  // Disable XSS filter (modern browsers have better XSS protection)
+  headers.set("X-XSS-Protection", "0");
+  // Prevent caching of sensitive data
+  headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  headers.set("Pragma", "no-cache");
+  headers.set("Expires", "0");
+  // Additional security headers
+  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // Prevent content type sniffing
+  headers.set("X-Content-Type-Options", "nosniff");
+  
+  return headers;
+}
+
+/**
+ * Create a response with security headers
+ * @param {string|object} body - Response body (string or object)
+ * @param {object} options - Response options
+ * @returns {Response} The response object
+ */
+function createSecureResponse(body, options = {}) {
+  const { status = 200, headers = new Headers() } = options;
+  
+  // Set default content type if not specified
+  if (!headers.has('content-type')) {
+    headers.set('content-type', 'text/plain');
+  }
+  
+  // Add security headers
+  addSecurityHeaders(headers);
+  
+  // Stringify if body is an object
+  const responseBody = typeof body === 'object' 
+    ? JSON.stringify(body, null, 2) 
+    : body;
+    
+  return new Response(responseBody, {
+    status,
+    headers
+  });
+}
+
 const EXPENSIVE = ["/speed", "/upload", "/echo"];
 const FREE_LIMITED = ["/ping", "/info", "/healthz", "/headers", "/version"];
 const RATE_LIMIT = 30; // requests per minute per IP
@@ -42,10 +98,12 @@ export default {
     // Require token for expensive endpoints
     if (EXPENSIVE.includes(path)) {
       if (!token || token !== validToken) {
-        headers.set("content-type", "application/json");
-        return new Response(
-          JSON.stringify({ error: "Unauthorized: missing or invalid token" }),
-          { status: 401, headers }
+        return createSecureResponse(
+          { error: "Unauthorized: missing or invalid token" },
+          { 
+            status: 401,
+            headers: new Headers({ 'content-type': 'application/json' })
+          }
         );
       }
       // proceed with expensive endpoint...
@@ -58,10 +116,12 @@ export default {
         const kvKey = `rl:${ip}:${path}:${now}`;
         let count = parseInt(await env.RATE_LIMIT_KV.get(kvKey)) || 0;
         if (count >= RATE_LIMIT) {
-          headers.set("content-type", "application/json");
-          return new Response(
-            JSON.stringify({ error: "Too Many Requests" }),
-            { status: 429, headers }
+          return createSecureResponse(
+            { error: "Too Many Requests" },
+            { 
+              status: 429,
+              headers: new Headers({ 'content-type': 'application/json' })
+            }
           );
         }
         ctx.waitUntil(env.RATE_LIMIT_KV.put(kvKey, (count + 1).toString(), { expirationTtl: 120 }));
@@ -77,8 +137,7 @@ export default {
         cf: getCfInfo(request.cf || {}),
         traceparent: traceparent || null,
       };
-      headers.set("content-type", "application/json");
-      return new Response(JSON.stringify(resp, null, 2), { status: 200, headers });
+      return createSecureResponse(resp, { headers: new Headers({ 'content-type': 'application/json' }) });
     }
 
     // /speed
@@ -86,8 +145,13 @@ export default {
       let size = parseInt(url.searchParams.get("size") || "1048576", 10); // Default 1MB
       if (isNaN(size) || size < 0) size = 1048576;
       if (size > MAX_SIZE) {
-        headers.set("content-type", "application/json");
-        return new Response(JSON.stringify({ error: `Size too large (max ${MAX_SIZE} bytes)` }), { status: 413, headers });
+        return createSecureResponse(
+          { error: `Size too large (max ${MAX_SIZE} bytes)` },
+          { 
+            status: 413,
+            headers: new Headers({ 'content-type': 'application/json' })
+          }
+        );
       }
       let pattern = url.searchParams.get("pattern") || "zero";
       let buf;
@@ -96,46 +160,55 @@ export default {
       } else {
         buf = new Uint8Array(size); // zeroes by default
       }
-      headers.set("content-type", "application/octet-stream");
-      headers.set("content-length", size.toString());
-      return new Response(buf, { status: 200, headers });
+      const responseHeaders = new Headers();
+      responseHeaders.set("content-type", "application/octet-stream");
+      responseHeaders.set("content-length", size.toString());
+      return createSecureResponse(buf, { headers: responseHeaders });
     }
 
     // /upload
     if (path === "/upload" && request.method === "POST") {
       let bytes = await request.arrayBuffer();
       if (bytes.byteLength > MAX_SIZE) {
-        headers.set("content-type", "application/json");
-        return new Response(JSON.stringify({ error: `Upload too large (max ${MAX_SIZE} bytes)` }), { status: 413, headers });
+        return createSecureResponse(
+          { error: `Upload too large (max ${MAX_SIZE} bytes)` },
+          { 
+            status: 413,
+            headers: new Headers({ 'content-type': 'application/json' })
+          }
+        );
       }
       const resp = {
         received: bytes.byteLength,
         timestamp: Date.now(),
         traceparent: traceparent || null,
       };
-      headers.set("content-type", "application/json");
-      headers.set("x-bytes-received", bytes.byteLength.toString());
-      return new Response(JSON.stringify(resp, null, 2), { status: 200, headers });
+      const responseHeaders = new Headers({
+        'content-type': 'application/json',
+        'x-bytes-received': bytes.byteLength.toString()
+      });
+      return createSecureResponse(resp, { headers: responseHeaders });
     }
 
     // /info
     if (path === "/info" && request.method === "GET") {
         const cf = request.cf || {};
-        const resp = {
-          ip: request.headers.get("cf-connecting-ip") || null,
-          asn: cf.asn || null,
-          city: cf.city || null,
-          region: cf.region || null,
-          country: cf.country || null,
-          latitude: cf.latitude || null,
-          longitude: cf.longitude || null,
-          timezone: cf.timezone || null,
-          colo: cf.colo || null,
-          user_agent: request.headers.get("user-agent") || null,
-          traceparent: traceparent || null,
-        };
-        headers.set("content-type", "application/json");
-        return new Response(JSON.stringify(resp, null, 2), { status: 200, headers });
+        return createSecureResponse(
+          {
+            ip: request.headers.get("cf-connecting-ip") || null,
+            asn: cf.asn || null,
+            city: cf.city || null,
+            region: cf.region || null,
+            country: cf.country || null,
+            latitude: cf.latitude || null,
+            longitude: cf.longitude || null,
+            timezone: cf.timezone || null,
+            colo: cf.colo || null,
+            user_agent: request.headers.get("user-agent") || null,
+            traceparent: traceparent || null,
+          },
+          { headers: new Headers({ 'content-type': 'application/json' }) }
+        );
     }
 
     // /headers
@@ -144,19 +217,22 @@ export default {
       for (let [key, value] of request.headers.entries()) {
         allHeaders[key] = value;
       }
-      headers.set("content-type", "application/json");
-      return new Response(JSON.stringify({ headers: allHeaders, traceparent: traceparent || null }, null, 2), { status: 200, headers });
+      return createSecureResponse(
+        { headers: allHeaders, traceparent: traceparent || null },
+        { headers: new Headers({ 'content-type': 'application/json' }) }
+      );
     }
 
     // /version
     if (path === "/version" && request.method === "GET") {
-      const resp = {
-        version: VERSION,
-        commit: GIT_COMMIT,
-        build: BUILD_TIME,
-      };
-      headers.set("content-type", "application/json");
-      return new Response(JSON.stringify(resp, null, 2), { status: 200, headers });
+      return createSecureResponse(
+        {
+          version: VERSION,
+          commit: GIT_COMMIT,
+          build: BUILD_TIME,
+        },
+        { headers: new Headers({ 'content-type': 'application/json' }) }
+      );
     }
 
     // /echo
@@ -166,23 +242,27 @@ export default {
       for (let [key, value] of request.headers.entries()) {
         allHeaders[key] = value;
       }
-      const resp = {
-        echoed: reqBody,
-        headers: allHeaders,
-        traceparent: traceparent || null,
-      };
-      headers.set("content-type", "application/json");
-      return new Response(JSON.stringify(resp, null, 2), { status: 200, headers });
+      return createSecureResponse(
+        {
+          echoed: reqBody,
+          headers: allHeaders,
+          traceparent: traceparent || null,
+        },
+        { headers: new Headers({ 'content-type': 'application/json' }) }
+      );
     }
 
     // /healthz
     if (path === "/healthz" && request.method === "GET") {
-      headers.set("content-type", "application/json");
-      return new Response(JSON.stringify({ status: "ok" }), { status: 200, headers });
+      return createSecureResponse(
+        { status: "ok" },
+        { headers: new Headers({ 'content-type': 'application/json' }) }
+      );
     }
 
     // Default: ok
-    headers.set("content-type", "text/plain");
-    return new Response("ok", { status: 200, headers });
+    return createSecureResponse("ok", { 
+      headers: new Headers({ 'content-type': 'text/plain' }) 
+    });
   }
 };
