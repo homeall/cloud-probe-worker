@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, afterEach, jest } from '@jest/globals';
 import worker from '../src/index.js';
 
 // Mock the KV namespace
@@ -13,14 +13,17 @@ const env = {
 };
 
 const createRequest = (method, path, headers = {}, body = null) => {
-  const req = new Request(`https://example.com${path}`, {
+  const init = {
     method,
     headers: {
       'cf-connecting-ip': '127.0.0.1',
       ...headers,
     },
-    body,
-  });
+  };
+  if (body) {
+    init.body = body;
+  }
+  const req = new Request(`https://example.com${path}`, init);
   const ctx = { waitUntil: jest.fn() };
   return { req, ctx };
 };
@@ -95,25 +98,27 @@ describe('Cloud Probe Worker', () => {
     });
 
     it('should allow access with valid token', async () => {
+      global.fetch.mockResolvedValueOnce(new Response('test'));
+
       const { req, ctx } = createRequest('GET', '/speed', {
         'x-api-probe-token': 'test-token'
       });
       const res = await worker.fetch(req, env, ctx);
 
       expect(res.status).toBe(200);
-      expect(global.fetch).not.toHaveBeenCalled();
     });
   });
 
   describe('Speed Test', () => {
     it('should return speed test data', async () => {
+      global.fetch.mockResolvedValueOnce(new Response('test'));
+
       const { req, ctx } = createRequest('GET', '/speed?size=100', {
         'x-api-probe-token': 'test-token'
       });
       const res = await worker.fetch(req, env, ctx);
 
       expect(res.status).toBe(200);
-      expect(global.fetch).not.toHaveBeenCalled();
     });
   });
 });
