@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterEach, jest } from '@jest/globals';
 import worker from '../src/index.js';
 
 // Mock the KV namespace
