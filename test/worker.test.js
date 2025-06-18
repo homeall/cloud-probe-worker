@@ -1,6 +1,4 @@
-import { test, expect, beforeAll, afterAll } from 'vitest';
-import { setupServer } from 'msw/node';
-import { rest } from 'msw';
+import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import { createMocks } from 'node-mocks-http';
 import worker from '../src/index.js';
 
