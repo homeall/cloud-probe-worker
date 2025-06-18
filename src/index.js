@@ -27,8 +27,6 @@ function addSecurityHeaders(headers) {
   headers.set("Expires", "0");
   // Additional security headers
   headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  // Prevent content type sniffing
-  headers.set("X-Content-Type-Options", "nosniff");
   
   return headers;
 }
