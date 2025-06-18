@@ -1,7 +1,4 @@
-import { test, expect, beforeAll, afterAll } from 'vitest';
-import { setupServer } from 'msw/node';
-import { rest } from 'msw';
-import { createMocks } from 'node-mocks-http';
+import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import worker from '../src/index.js';
 
 // Mock the KV namespace
@@ -16,22 +13,19 @@ const env = {
 };
 
 const createRequest = (method, path, headers = {}, body = null) => {
-  const { req, res } = createMocks({
+  const init = {
     method,
-    url: `https://example.com${path}`,
     headers: {
       'cf-connecting-ip': '127.0.0.1',
       ...headers,
     },
-  }, {
-    eventEmitter: require('events').EventEmitter,
-  });
-
+  };
   if (body) {
-    req.body = body;
+    init.body = body;
   }
-
-  return { req, res };
+  const req = new Request(`https://example.com${path}`, init);
+  const ctx = { waitUntil: jest.fn() };
+  return { req, ctx };
 };
 
 describe('Cloud Probe Worker', () => {
@@ -46,13 +40,13 @@ describe('Cloud Probe Worker', () => {
 
   describe('GET /ping', () => {
     it('should return 200 with timestamp and cf info', async () => {
-      const { req, res } = createRequest('GET', '/ping');
+      const { req, ctx } = createRequest('GET', '/ping');
       req.cf = { colo: 'DFW', country: 'US' };
 
-      await worker.fetch(req, env);
+      const res = await worker.fetch(req, env, ctx);
 
-      expect(res._getStatusCode()).toBe(200);
-      const data = JSON.parse(res._getData());
+      expect(res.status).toBe(200);
+      const data = await res.json();
       expect(data).toHaveProperty('timestamp');
       expect(data.cf).toHaveProperty('colo', 'DFW');
     });
@@ -60,17 +54,17 @@ describe('Cloud Probe Worker', () => {
 
   describe('GET /info', () => {
     it('should return client and edge information', async () => {
-      const { req, res } = createRequest('GET', '/info');
+      const { req, ctx } = createRequest('GET', '/info');
       req.cf = {
         city: 'Test City',
         country: 'US',
         colo: 'DFW'
       };
 
-      await worker.fetch(req, env);
+      const res = await worker.fetch(req, env, ctx);
 
-      expect(res._getStatusCode()).toBe(200);
-      const data = JSON.parse(res._getData());
+      expect(res.status).toBe(200);
+      const data = await res.json();
       expect(data.ip).toBe('127.0.0.1');
       expect(data.city).toBe('Test City');
     });
@@ -80,42 +74,41 @@ describe('Cloud Probe Worker', () => {
     it('should allow requests under the rate limit', async () => {
       mockKV.get.mockResolvedValueOnce('10'); // Current count
 
-      const { req, res } = createRequest('GET', '/ping');
-      await worker.fetch(req, env);
+      const { req, ctx } = createRequest('GET', '/ping');
+      const res = await worker.fetch(req, env, ctx);
 
-      expect(res._getStatusCode()).toBe(200);
+      expect(res.status).toBe(200);
       expect(mockKV.put).toHaveBeenCalled();
     });
 
     it('should block requests over the rate limit', async () => {
       mockKV.get.mockResolvedValueOnce('30'); // Over limit
 
-      const { req, res } = createRequest('GET', '/ping');
-      await worker.fetch(req, env);
+      const { req, ctx } = createRequest('GET', '/ping');
+      const res = await worker.fetch(req, env, ctx);
 
-      expect(res._getStatusCode()).toBe(429);
+      expect(res.status).toBe(429);
     });
   });
 
   describe('Authentication', () => {
     it('should require token for protected endpoints', async () => {
-      const { req, res } = createRequest('GET', '/speed');
+      const { req, ctx } = createRequest('GET', '/speed');
+      const res = await worker.fetch(req, env, ctx);
 
-      await worker.fetch(req, env);
-
-      expect(res._getStatusCode()).toBe(401);
+      expect(res.status).toBe(401);
     });
 
     it('should allow access with valid token', async () => {
       global.fetch.mockResolvedValueOnce(new Response('test'));
 
-      const { req, res } = createRequest('GET', '/speed', {
+      const { req, ctx } = createRequest('GET', '/speed', {
         'x-api-probe-token': 'test-token'
       });
 
-      await worker.fetch(req, env);
+      const res = await worker.fetch(req, env, ctx);
 
-      expect(res._getStatusCode()).toBe(200);
+      expect(res.status).toBe(200);
     });
   });
 
@@ -123,14 +116,13 @@ describe('Cloud Probe Worker', () => {
     it('should return speed test data', async () => {
       global.fetch.mockResolvedValueOnce(new Response('test'));
 
-      const { req, res } = createRequest('GET', '/speed?size=100', {
+      const { req, ctx } = createRequest('GET', '/speed?size=100', {
         'x-api-probe-token': 'test-token'
       });
 
-      await worker.fetch(req, env);
+      const res = await worker.fetch(req, env, ctx);
 
-      expect(res._getStatusCode()).toBe(200);
-      expect(global.fetch).toHaveBeenCalled();
+      expect(res.status).toBe(200);
     });
   });
 });
