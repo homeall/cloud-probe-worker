@@ -7,6 +7,7 @@
         "itty-router": "^3.0.11"
     },
     "description": "Global, serverless network probe endpoints with OpenTelemetry support",
+    "type": "module",
     "devDependencies": {
         "@cloudflare/workers-types": "^4.20230518.0",
         "@types/jest": "^29.5.0",
@@ -44,7 +45,7 @@
         "dev": "wrangler dev",
         "format": "prettier --write '**/*.{js,json}'",
         "lint": "eslint . --ext .js",
-        "test": "jest"
+        "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
     },
     "version": "1.0.0"
 }
