@@ -46,13 +46,21 @@ function addSecurityHeaders(headers) {
 function createSecureResponse(body, options = {}) {
   const { status = 200, headers = new Headers() } = options;
   
+  // Add security headers
+  addSecurityHeaders(headers);
+  
+  // Handle Uint8Array as binary data
+  if (body instanceof Uint8Array) {
+    return new Response(body, {
+      status,
+      headers
+    });
+  }
+  
   // Set default content type if not specified
   if (!headers.has('content-type')) {
     headers.set('content-type', 'text/plain');
   }
-  
-  // Add security headers
-  addSecurityHeaders(headers);
   
   // Stringify if body is an object
   const responseBody = typeof body === 'object' 
@@ -175,10 +183,12 @@ export default {
       } else {
         buf = new Uint8Array(size); // zeroes by default
       }
-      const responseHeaders = new Headers();
-      responseHeaders.set("content-type", "application/octet-stream");
-      responseHeaders.set("content-length", size.toString());
-      return createSecureResponse(buf, { headers: responseHeaders });
+      return createSecureResponse(buf, { 
+        headers: new Headers({
+          'content-type': 'application/octet-stream',
+          'content-length': size.toString()
+        })
+      });
     }
 
     // /upload
