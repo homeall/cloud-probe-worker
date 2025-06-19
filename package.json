@@ -8,7 +8,6 @@
         "itty-router": "^3.0.11"
     },
     "description": "Global, serverless network probe endpoints with OpenTelemetry support",
-    "type": "module",
     "devDependencies": {
         "@cloudflare/workers-types": "^4.20230518.0",
         "@types/jest": "^29.5.0",
@@ -19,7 +18,10 @@
         "wrangler": "^3.0.0"
     },
     "engines": {
-        "node": ">=16.0.0"
+        "node": ">=22.0.0"
+    },
+    "volta": {
+        "node": "22.0.0"
     },
     "jest": {
         "collectCoverage": true,
