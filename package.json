@@ -34,6 +34,9 @@
             "**/test/**/*.test.js"
         ]
     },
+    "scripts": {
+        "build": "wrangler build --env production --var VERSION=${VERSION:-v1.0.0} --var GIT_COMMIT=${GIT_COMMIT:-abcdef0} --var BUILD_TIME=${BUILD_TIME:-$(date -u +'%Y-%m-%d')}"
+    },
     "main": "src/index.js",
     "name": "cloud-probe-worker",
     "prettier": {

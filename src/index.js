@@ -1,8 +1,8 @@
 // cloud-probe-worker/src/index.js
 
-const VERSION = "v1.0.0";
-const GIT_COMMIT = "abcdef0";
-const BUILD_TIME = "2024-06-19";
+const VERSION = import.meta.env.VERSION || "v1.0.0";
+const GIT_COMMIT = import.meta.env.GIT_COMMIT || "abcdef0";
+const BUILD_TIME = import.meta.env.BUILD_TIME || "2024-06-19";
 const MAX_SIZE = 100 * 1024 * 1024; // 100MB
 
 /**
