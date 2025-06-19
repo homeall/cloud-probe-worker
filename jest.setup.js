@@ -1,4 +1,6 @@
-globalThis.import = new Proxy(globalThis.import, {
+import { setGlobal } from '@cloudflare/workers-types';
+
+setGlobal('import', new Proxy(globalThis.import, {
   apply(target, thisArg, args) {
     if (args[0] === 'meta') {
       return Promise.resolve({
@@ -11,4 +13,4 @@ globalThis.import = new Proxy(globalThis.import, {
     }
     return target.apply(thisArg, args);
   }
-});
+}));
