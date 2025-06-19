@@ -35,6 +35,7 @@
         ]
     },
     "scripts": {
+        "lint": "eslint . --ext .js",
         "test": "jest --config jest.config.js",
         "build": "wrangler build --env production --var VERSION=${VERSION:-v1.0.0} --var GIT_COMMIT=${GIT_COMMIT:-abcdef0} --var BUILD_TIME=${BUILD_TIME:-$(date -u +'%Y-%m-%d')}"
     },
