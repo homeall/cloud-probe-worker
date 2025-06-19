@@ -59,3 +59,4 @@ jobs:
         env:
           RATE_LIMIT_KV_ID: ${{ secrets.RATE_LIMIT_KV_ID }}
           API_PROBE_TOKEN: ${{ secrets.API_PROBE_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
