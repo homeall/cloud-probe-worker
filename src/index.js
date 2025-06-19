@@ -3,7 +3,6 @@
 const VERSION = import.meta.env.VERSION || "v1.0.0";
 const GIT_COMMIT = import.meta.env.GIT_COMMIT || "abcdef0";
 const BUILD_TIME = import.meta.env.BUILD_TIME || "2024-06-19";
-const MAX_SIZE = 100 * 1024 * 1024; // 100MB
 
 /**
  * Add security headers to all responses
@@ -70,19 +69,6 @@ function createSecureResponse(body, options = {}) {
 const EXPENSIVE = ["/speed", "/upload", "/echo"];
 const FREE_LIMITED = ["/ping", "/info", "/healthz", "/headers", "/version"];
 const RATE_LIMIT = 30; // requests per minute per IP
-
-function getCfInfo(cf) {
-  return {
-    colo: cf?.colo,
-    country: cf?.country,
-    asn: cf?.asn,
-    region: cf?.region,
-    city: cf?.city,
-    latitude: cf?.latitude,
-    longitude: cf?.longitude,
-    timezone: cf?.timezone,
-  };
-}
 
 export async function fetch(request, env, ctx) {
   const url = new URL(request.url);

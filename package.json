@@ -36,7 +36,7 @@
         ]
     },
     "scripts": {
-        "lint": "eslint . --ext .js",
+        "lint": "eslint . --ext .js --config .eslintrc.cjs",
         "test": "node --experimental-vm-modules --no-warnings test/test-runner.mjs",
         "build": "wrangler build --env production --var VERSION=${VERSION:-v1.0.0} --var GIT_COMMIT=${GIT_COMMIT:-abcdef0} --var BUILD_TIME=${BUILD_TIME:-$(date -u +'%Y-%m-%d')}"
     },

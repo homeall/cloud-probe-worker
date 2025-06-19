@@ -1,4 +1,4 @@
-import worker from '../src/index.js';
+import { fetch } from '../src/index.js';
 
 // Mock Cloudflare environment
 const mockEnv = {
@@ -36,37 +36,6 @@ async function runTests() {
   {
     const { req, ctx } = createRequest('GET', '/ping');
     req.cf = { colo: 'DFW', country: 'US' };
-    const res = await worker.fetch(req, mockEnv, ctx);
-    
-    if (res.status !== 200) {
-      throw new Error(`Expected status 200, got ${res.status}`);
-    }
-    
-    const data = await res.json();
-    if (!data.timestamp) {
-      throw new Error('Response missing timestamp');
-    }
-    if (!data.cf?.colo || data.cf.colo !== 'DFW') {
-      throw new Error('Invalid colo in response');
-    }
-    if (!data.cf?.country || data.cf.country !== 'US') {
-      throw new Error('Invalid country in response');
-    }
-  }
-  
-  console.log('All tests passed!');
-}
-
-runTests().catch(console.error);
-
-// Test suite
-async function runTests() {
-  console.log('Running tests...');
-  
-  // Test /ping endpoint
-  {
-    const { req, ctx } = createRequest('GET', '/ping');
-    req.cf = { colo: 'DFW', country: 'US' };
     const res = await fetch(req, mockEnv, ctx);
     
     if (res.status !== 200) {
@@ -88,35 +57,5 @@ async function runTests() {
   console.log('All tests passed!');
 }
 
-runTests().catch(console.error);
-
-// Test suite
-async function runTests() {
-  console.log('Running tests...');
-  
-  // Test /ping endpoint
-  {
-    const { req, ctx } = createRequest('GET', '/ping');
-    req.cf = { colo: 'DFW', country: 'US' };
-    const res = await worker.fetch(req, mockEnv, ctx);
-    
-    if (res.status !== 200) {
-      throw new Error(`Expected status 200, got ${res.status}`);
-    }
-    
-    const data = await res.json();
-    if (!data.timestamp) {
-      throw new Error('Response missing timestamp');
-    }
-    if (!data.cf?.colo || data.cf.colo !== 'DFW') {
-      throw new Error('Invalid colo in response');
-    }
-    if (!data.cf?.country || data.cf.country !== 'US') {
-      throw new Error('Invalid country in response');
-    }
-  }
-  
-  console.log('All tests passed!');
-}
-
+// Run the tests
 runTests().catch(console.error);
