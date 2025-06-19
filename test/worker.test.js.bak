@@ -13,16 +13,28 @@ const mockEnv = {
   waitUntil: jest.fn()
 };
 
-// Mock global objects
-const mockRequest = new Request('https://example.com', {
-  cf: {
-    colo: 'DFW',
-    country: 'US'
-  },
-  headers: {
-    'cf-connecting-ip': '127.0.0.1'
+// Mock global environment
+Object.defineProperty(globalThis, 'env', {
+  value: mockEnv,
+  writable: true
+});
+
+// Mock import.meta.env
+Object.defineProperty(import.meta, 'env', {
+  value: {
+    VERSION: 'test-version',
+    GIT_COMMIT: 'test-commit',
+    BUILD_TIME: '2024-06-19'
   }
 });
+
+  if (body) {
+    init.body = body;
+  }
+  const req = new Request(`https://example.com${path}`, init);
+  const ctx = { waitUntil: jest.fn() };
+  return { req, ctx };
+};
 
 // Mock global environment
 Object.defineProperty(globalThis, 'env', {
@@ -39,14 +51,6 @@ Object.defineProperty(import.meta, 'env', {
   }
 });
 
-const createRequest = (method, path, headers = {}, body = null) => {
-  const init = {
-    method,
-    headers: {
-      'cf-connecting-ip': '127.0.0.1',
-      ...headers,
-    },
-  };
   if (body) {
     init.body = body;
   }
@@ -69,7 +73,7 @@ describe('Cloud Probe Worker', () => {
     it('should return 200 with timestamp and cf info', async () => {
       const { req, ctx } = createRequest('GET', '/ping');
       req.cf = { colo: 'DFW', country: 'US' };
-      const res = await worker.fetch(req, env, ctx);
+      const res = await worker.fetch(req, mockEnv, ctx);
 
       expect(res.status).toBe(200);
       const data = await res.json();
@@ -97,20 +101,20 @@ describe('Cloud Probe Worker', () => {
 
   describe('Rate Limiting', () => {
     it('should allow requests under the rate limit', async () => {
-      mockKV.get.mockResolvedValueOnce('10'); // Current count
+      mockEnv.RATE_LIMIT_KV.get.mockResolvedValueOnce('10'); // Current count
 
       const { req, ctx } = createRequest('GET', '/ping');
-      const res = await worker.fetch(req, env, ctx);
+      const res = await worker.fetch(req, mockEnv, ctx);
 
       expect(res.status).toBe(200);
-      expect(mockKV.put).toHaveBeenCalled();
+      expect(mockEnv.RATE_LIMIT_KV.put).toHaveBeenCalled();
     });
 
     it('should block requests over the rate limit', async () => {
-      mockKV.get.mockResolvedValueOnce('30'); // Over limit
+      mockEnv.RATE_LIMIT_KV.get.mockResolvedValueOnce('30'); // Over limit
 
       const { req, ctx } = createRequest('GET', '/ping');
-      const res = await worker.fetch(req, env, ctx);
+      const res = await worker.fetch(req, mockEnv, ctx);
 
       expect(res.status).toBe(429);
     });
