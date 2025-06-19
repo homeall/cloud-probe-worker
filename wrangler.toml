@@ -5,21 +5,22 @@ compatibility_flags = ["nodejs_compat"]
 
 [build]
 command = "npm install"
-format = "service-worker"
 
 [triggers]
-crons = ["*/5 * * * *"]  # Run every 5 minutes for scheduled tasks
+crons = ["*/5 * * * *"]
 
-# KV Namespace for rate limiting and metrics
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "${RATE_LIMIT_KV_ID}"
 
-# Production environment configuration
 [env.production]
 workers_dev = false
 route = "*.probe.homeall.com/*"
 zone_id = "${ZONE_ID}"
+
+  [[env.production.kv_namespaces]]
+  binding = "RATE_LIMIT_KV"
+  id = "${RATE_LIMIT_KV_ID}"
 
 [dev]
 port = 8787
