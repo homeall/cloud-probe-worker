@@ -1,25 +1,56 @@
-import { describe, it, expect, beforeAll, afterEach, jest } from '@jest/globals';
 import worker from '../src/index.js';
 
-// Mock the KV namespace
-const mockKV = {
-  get: jest.fn(),
-  put: jest.fn().mockResolvedValue(undefined),
-};
+// Jest globals are available by default in test files
+// describe, it, expect, beforeAll, afterEach, jest
 
-const env = {
-  RATE_LIMIT_KV: mockKV,
+// Mock Cloudflare environment
+const mockEnv = {
+  RATE_LIMIT_KV: {
+    get: jest.fn(),
+    put: jest.fn().mockResolvedValue(undefined),
+  },
   API_PROBE_TOKEN: 'test-token',
+  waitUntil: jest.fn()
 };
 
-const createRequest = (method, path, headers = {}, body = null) => {
-  const init = {
-    method,
-    headers: {
-      'cf-connecting-ip': '127.0.0.1',
-      ...headers,
-    },
-  };
+// Mock global environment
+Object.defineProperty(globalThis, 'env', {
+  value: mockEnv,
+  writable: true
+});
+
+// Mock import.meta.env
+Object.defineProperty(import.meta, 'env', {
+  value: {
+    VERSION: 'test-version',
+    GIT_COMMIT: 'test-commit',
+    BUILD_TIME: '2024-06-19'
+  }
+});
+
+  if (body) {
+    init.body = body;
+  }
+  const req = new Request(`https://example.com${path}`, init);
+  const ctx = { waitUntil: jest.fn() };
+  return { req, ctx };
+};
+
+// Mock global environment
+Object.defineProperty(globalThis, 'env', {
+  value: mockEnv,
+  writable: true
+});
+
+// Mock import.meta.env
+Object.defineProperty(import.meta, 'env', {
+  value: {
+    VERSION: 'test-version',
+    GIT_COMMIT: 'test-commit',
+    BUILD_TIME: '2024-06-19'
+  }
+});
+
   if (body) {
     init.body = body;
   }
@@ -42,7 +73,7 @@ describe('Cloud Probe Worker', () => {
     it('should return 200 with timestamp and cf info', async () => {
       const { req, ctx } = createRequest('GET', '/ping');
       req.cf = { colo: 'DFW', country: 'US' };
-      const res = await worker.fetch(req, env, ctx);
+      const res = await worker.fetch(req, mockEnv, ctx);
 
       expect(res.status).toBe(200);
       const data = await res.json();
@@ -70,20 +101,20 @@ describe('Cloud Probe Worker', () => {
 
   describe('Rate Limiting', () => {
     it('should allow requests under the rate limit', async () => {
-      mockKV.get.mockResolvedValueOnce('10'); // Current count
+      mockEnv.RATE_LIMIT_KV.get.mockResolvedValueOnce('10'); // Current count
 
       const { req, ctx } = createRequest('GET', '/ping');
-      const res = await worker.fetch(req, env, ctx);
+      const res = await worker.fetch(req, mockEnv, ctx);
 
       expect(res.status).toBe(200);
-      expect(mockKV.put).toHaveBeenCalled();
+      expect(mockEnv.RATE_LIMIT_KV.put).toHaveBeenCalled();
     });
 
     it('should block requests over the rate limit', async () => {
-      mockKV.get.mockResolvedValueOnce('30'); // Over limit
+      mockEnv.RATE_LIMIT_KV.get.mockResolvedValueOnce('30'); // Over limit
 
       const { req, ctx } = createRequest('GET', '/ping');
-      const res = await worker.fetch(req, env, ctx);
+      const res = await worker.fetch(req, mockEnv, ctx);
 
       expect(res.status).toBe(429);
     });

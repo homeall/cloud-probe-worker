@@ -1,9 +1,23 @@
 // cloud-probe-worker/src/index.js
 
-const VERSION = import.meta.env.VERSION || "v1.0.0";
-const GIT_COMMIT = import.meta.env.GIT_COMMIT || "abcdef0";
-const BUILD_TIME = import.meta.env.BUILD_TIME || "2024-06-19";
-const MAX_SIZE = 100 * 1024 * 1024; // 100MB
+// Handle environment variables for both Node.js and Cloudflare Workers
+const getEnv = () => {
+  // For Cloudflare Workers
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    return import.meta.env;
+  }
+  // For Node.js environment (testing)
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env;
+  }
+  // Fallback
+  return {};
+};
+
+const env = getEnv();
+const VERSION = env.VERSION || "v1.0.0";
+const GIT_COMMIT = env.GIT_COMMIT || "abcdef0";
+const BUILD_TIME = env.BUILD_TIME || new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
 /**
  * Adds a comprehensive set of security headers to the provided Headers object.
@@ -81,142 +95,57 @@ const RATE_LIMIT = 30; /**
  * @return {object} An object containing colo, country, ASN, region, city, latitude, longitude, and timezone information.
  */
 
-function getCfInfo(cf) {
-  return {
-    colo: cf?.colo,
-    country: cf?.country,
-    asn: cf?.asn,
-    region: cf?.region,
-    city: cf?.city,
-    latitude: cf?.latitude,
-    longitude: cf?.longitude,
-    timezone: cf?.timezone,
-  };
-}
+export async function fetch(request, env, ctx) {
+  const url = new URL(request.url);
+  const path = url.pathname;
+  const token = request.headers.get("x-api-probe-token") || "";
+  const validToken = env.API_PROBE_TOKEN;
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  const headers = new Headers();
 
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    const path = url.pathname;
-    const token = request.headers.get("x-api-probe-token") || "";
-    const validToken = env.API_PROBE_TOKEN;
-    const ip = request.headers.get("cf-connecting-ip") || "unknown";
-    const headers = new Headers();
+  // Echo traceparent header if present
+  const traceparent = request.headers.get("traceparent");
+  if (traceparent) {
+    headers.set("traceparent", traceparent);
+  }
 
-    // Echo traceparent header if present
-    const traceparent = request.headers.get("traceparent");
-    if (traceparent) {
-      headers.set("traceparent", traceparent);
+  // --- PROTECTION LOGIC ---
+  if (EXPENSIVE.includes(path)) {
+    if (!token || token !== validToken) {
+      return createSecureResponse(
+        { error: "Unauthorized: missing or invalid token" },
+        { status: 401, headers: new Headers({ 'content-type': 'application/json' }) }
+      );
     }
+  }
 
-    // --- PROTECTION LOGIC ---
-
-    // Require token for expensive endpoints
-    if (EXPENSIVE.includes(path)) {
-      if (!token || token !== validToken) {
+  // --- RATE LIMITING ---
+  if (FREE_LIMITED.includes(path)) {
+    if (env.RATE_LIMIT_KV) {
+      const now = Math.floor(Date.now() / 60000); // current minute
+      const kvKey = `rl:${ip}:${path}:${now}`;
+      let count = parseInt(await env.RATE_LIMIT_KV.get(kvKey)) || 0;
+      if (count >= RATE_LIMIT) {
         return createSecureResponse(
-          { error: "Unauthorized: missing or invalid token" },
-          { 
-            status: 401,
-            headers: new Headers({ 'content-type': 'application/json' })
-          }
+          { error: "Too Many Requests" },
+          { status: 429, headers: new Headers({ 'content-type': 'application/json' }) }
         );
       }
-      // proceed with expensive endpoint...
+      ctx.waitUntil(env.RATE_LIMIT_KV.put(kvKey, (count + 1).toString(), { expirationTtl: 120 }));
     }
+  }
 
-    // Rate-limit free endpoints per IP (KV-based)
-    if (FREE_LIMITED.includes(path)) {
-      if (env.RATE_LIMIT_KV) {
-        const now = Math.floor(Date.now() / 60000); // current minute
-        const kvKey = `rl:${ip}:${path}:${now}`;
-        
-        // Use atomic increment operation
-        const currentCount = await env.RATE_LIMIT_KV.atomic().increment(kvKey, 1).then(result => result.value);
-        
-        // If this is the first request, set expiration
-        if (currentCount === 1) {
-          ctx.waitUntil(env.RATE_LIMIT_KV.put(kvKey, currentCount.toString(), { expirationTtl: 120 }));
-        }
-        
-        if (currentCount > RATE_LIMIT) {
-          return createSecureResponse(
-            { error: "Too Many Requests" },
-            { 
-              status: 429,
-              headers: new Headers({ 'content-type': 'application/json' })
-            }
-          );
-        }
-      }
-    }
+  // --- ENDPOINTS ---
+  // /ping
+  if (path === "/ping" && request.method === "GET") {
+    return createSecureResponse({
+      timestamp: new Date().toISOString(),
+      cf: request.cf
+    }, { headers });
+  }
 
-    // --- ENDPOINT LOGIC ---
-
-    // /ping
-    if (path === "/ping" && request.method === "GET") {
-      const resp = {
-        timestamp: Date.now(),
-        cf: getCfInfo(request.cf || {}),
-        traceparent: traceparent || null,
-      };
-      return createSecureResponse(resp, { headers: new Headers({ 'content-type': 'application/json' }) });
-    }
-
-    // /speed
-    if (path === "/speed" && request.method === "GET") {
-      let size = parseInt(url.searchParams.get("size") || "1048576", 10); // Default 1MB
-      if (isNaN(size) || size < 0) size = 1048576;
-      if (size > MAX_SIZE) {
-        return createSecureResponse(
-          { error: `Size too large (max ${MAX_SIZE} bytes)` },
-          { 
-            status: 413,
-            headers: new Headers({ 'content-type': 'application/json' })
-          }
-        );
-      }
-      let pattern = url.searchParams.get("pattern") || "zero";
-      let buf;
-      if (pattern === "rand") {
-        buf = crypto.getRandomValues(new Uint8Array(size));
-      } else {
-        buf = new Uint8Array(size); // zeroes by default
-      }
-      return createSecureResponse(buf, { 
-        headers: new Headers({
-          'content-type': 'application/octet-stream',
-          'content-length': size.toString()
-        })
-      });
-    }
-
-    // /upload
-    if (path === "/upload" && request.method === "POST") {
-      let bytes = await request.arrayBuffer();
-      if (bytes.byteLength > MAX_SIZE) {
-        return createSecureResponse(
-          { error: `Upload too large (max ${MAX_SIZE} bytes)` },
-          { 
-            status: 413,
-            headers: new Headers({ 'content-type': 'application/json' })
-          }
-        );
-      }
-      const resp = {
-        received: bytes.byteLength,
-        timestamp: Date.now(),
-        traceparent: traceparent || null,
-      };
-      const responseHeaders = new Headers({
-        'content-type': 'application/json',
-        'x-bytes-received': bytes.byteLength.toString()
-      });
-      return createSecureResponse(resp, { headers: responseHeaders });
-    }
-
-    // /info
-    if (path === "/info" && request.method === "GET") {
+  // /info
+  if (path === "/info" && request.method === "GET") {
         const cf = request.cf || {};
         return createSecureResponse(
           {
@@ -290,4 +219,4 @@ export default {
       headers: new Headers({ 'content-type': 'text/plain' }) 
     });
   }
-};
+
