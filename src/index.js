@@ -112,8 +112,16 @@ export default {
       if (env.RATE_LIMIT_KV) {
         const now = Math.floor(Date.now() / 60000); // current minute
         const kvKey = `rl:${ip}:${path}:${now}`;
-        let count = parseInt(await env.RATE_LIMIT_KV.get(kvKey)) || 0;
-        if (count >= RATE_LIMIT) {
+        
+        // Use atomic increment operation
+        const currentCount = await env.RATE_LIMIT_KV.atomic().increment(kvKey, 1).then(result => result.value);
+        
+        // If this is the first request, set expiration
+        if (currentCount === 1) {
+          ctx.waitUntil(env.RATE_LIMIT_KV.put(kvKey, currentCount.toString(), { expirationTtl: 120 }));
+        }
+        
+        if (currentCount > RATE_LIMIT) {
           return createSecureResponse(
             { error: "Too Many Requests" },
             { 
@@ -122,7 +130,6 @@ export default {
             }
           );
         }
-        ctx.waitUntil(env.RATE_LIMIT_KV.put(kvKey, (count + 1).toString(), { expirationTtl: 120 }));
       }
     }
 
