@@ -1,4 +1,5 @@
 name = "cloud-probe-worker"
+account_id = "${CF_ACCOUNT_ID}"
 main = "src/index.js"
 compatibility_date = "2024-06-19"
 compatibility_flags = ["nodejs_compat"]
@@ -15,7 +16,7 @@ id = "${RATE_LIMIT_KV_ID}"
 
 [env.production]
 workers_dev = false
-route = "*.probe.homeall.com/*"
+route = "${PROBE_DOMAIN}/*"
 zone_id = "${ZONE_ID}"
 
   [[env.production.kv_namespaces]]
