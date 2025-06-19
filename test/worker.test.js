@@ -1,16 +1,43 @@
-import { describe, it, expect, beforeAll, afterEach, jest } from '@jest/globals';
 import worker from '../src/index.js';
 
-// Mock the KV namespace
-const mockKV = {
-  get: jest.fn(),
-  put: jest.fn().mockResolvedValue(undefined),
+// Jest globals are available by default in test files
+// describe, it, expect, beforeAll, afterEach, jest
+
+// Mock Cloudflare environment
+const mockEnv = {
+  RATE_LIMIT_KV: {
+    get: jest.fn(),
+    put: jest.fn().mockResolvedValue(undefined),
+  },
+  API_PROBE_TOKEN: 'test-token',
+  waitUntil: jest.fn()
 };
 
-const env = {
-  RATE_LIMIT_KV: mockKV,
-  API_PROBE_TOKEN: 'test-token',
-};
+// Mock global objects
+const mockRequest = new Request('https://example.com', {
+  cf: {
+    colo: 'DFW',
+    country: 'US'
+  },
+  headers: {
+    'cf-connecting-ip': '127.0.0.1'
+  }
+});
+
+// Mock global environment
+Object.defineProperty(globalThis, 'env', {
+  value: mockEnv,
+  writable: true
+});
+
+// Mock import.meta.env
+Object.defineProperty(import.meta, 'env', {
+  value: {
+    VERSION: 'test-version',
+    GIT_COMMIT: 'test-commit',
+    BUILD_TIME: '2024-06-19'
+  }
+});
 
 const createRequest = (method, path, headers = {}, body = null) => {
   const init = {

@@ -84,7 +84,7 @@ function getCfInfo(cf) {
   };
 }
 
-export default {
+const worker = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;

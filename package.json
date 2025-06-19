@@ -9,11 +9,8 @@
     },
     "description": "Global, serverless network probe endpoints with OpenTelemetry support",
     "devDependencies": {
-        "@babel/core": "^7.23.0",
-        "@babel/preset-env": "^7.22.20",
         "@cloudflare/workers-types": "^4.20230518.0",
         "@types/jest": "^29.5.0",
-        "babel-jest": "^29.6.3",
         "eslint": "^8.48.0",
         "eslint-config-prettier": "^9.0.0",
         "jest": "^29.7.0",
@@ -21,10 +18,10 @@
         "wrangler": "^3.0.0"
     },
     "engines": {
-        "node": ">=22.0.0"
+        "node": ">=24.0.0"
     },
     "volta": {
-        "node": "22.0.0"
+        "node": "24.0.0"
     },
     "jest": {
         "collectCoverage": true,
@@ -39,7 +36,7 @@
     },
     "scripts": {
         "lint": "eslint . --ext .js",
-        "test": "jest --config jest.config.js",
+        "test": "node --experimental-vm-modules --no-warnings test/test-runner.mjs",
         "build": "wrangler build --env production --var VERSION=${VERSION:-v1.0.0} --var GIT_COMMIT=${GIT_COMMIT:-abcdef0} --var BUILD_TIME=${BUILD_TIME:-$(date -u +'%Y-%m-%d')}"
     },
     "main": "src/index.js",
