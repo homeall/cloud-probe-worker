@@ -1,8 +1,23 @@
 // cloud-probe-worker/src/index.js
 
-const VERSION = import.meta.env.VERSION || "v1.0.0";
-const GIT_COMMIT = import.meta.env.GIT_COMMIT || "abcdef0";
-const BUILD_TIME = import.meta.env.BUILD_TIME || "2024-06-19";
+// Handle environment variables for both Node.js and Cloudflare Workers
+const getEnv = () => {
+  // For Cloudflare Workers
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    return import.meta.env;
+  }
+  // For Node.js environment (testing)
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env;
+  }
+  // Fallback
+  return {};
+};
+
+const env = getEnv();
+const VERSION = env.VERSION || "v1.0.0";
+const GIT_COMMIT = env.GIT_COMMIT || "abcdef0";
+const BUILD_TIME = env.BUILD_TIME || new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
 /**
  * Add security headers to all responses

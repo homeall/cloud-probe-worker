@@ -36,8 +36,8 @@
         ]
     },
     "scripts": {
-        "lint": "eslint . --ext .js --config .eslintrc.cjs",
-        "test": "node --experimental-vm-modules --no-warnings test/test-runner.mjs",
+        "lint": "eslint . --ext .js --config .eslintrc.json",
+        "test": "node --experimental-vm-modules --no-warnings test/test-runner.js",
         "build": "wrangler build --env production --var VERSION=${VERSION:-v1.0.0} --var GIT_COMMIT=${GIT_COMMIT:-abcdef0} --var BUILD_TIME=${BUILD_TIME:-$(date -u +'%Y-%m-%d')}"
     },
     "main": "src/index.js",
@@ -49,5 +49,19 @@
         "tabWidth": 2,
         "trailingComma": "es5"
     },
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "directories": {
+        "test": "test"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/homeall/cloud-probe-worker.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/homeall/cloud-probe-worker/issues"
+    },
+    "homepage": "https://github.com/homeall/cloud-probe-worker#readme"
 }
