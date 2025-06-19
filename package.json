@@ -47,11 +47,6 @@
         "trailingComma": "es5"
     },
     "scripts": {
-        "deploy": "wrangler deploy",
-        "dev": "wrangler dev",
-        "format": "prettier --write '**/*.{js,json}'",
-        "lint": "eslint . --ext .js",
-        "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+        "test": "jest --config jest.config.js"
     },
     "version": "1.0.0"
-}
