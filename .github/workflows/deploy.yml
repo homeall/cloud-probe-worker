@@ -12,6 +12,8 @@ env:
   CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
   RATE_LIMIT_KV_ID: ${{ secrets.RATE_LIMIT_KV_ID }}
   API_PROBE_TOKEN: ${{ secrets.API_PROBE_TOKEN }}
+  ZONE_ID: ${{ secrets.ZONE_ID }}
+  PROBE_DOMAIN: ${{ secrets.PROBE_DOMAIN }}
 
 jobs:
   deploy:
@@ -26,6 +28,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24.x'
+
+      - name: Generate wrangler.toml from template
+        run: |
+          cat .wrangler.toml.template \
+            | sed "s|\${CF_ACCOUNT_ID}|${{ secrets.CF_ACCOUNT_ID }}|g" \
+            | sed "s|\${RATE_LIMIT_KV_ID}|${{ secrets.RATE_LIMIT_KV_ID }}|g" \
+            | sed "s|\${ZONE_ID}|${{ secrets.ZONE_ID }}|g" \
+            | sed "s|\${PROBE_DOMAIN}|${{ secrets.PROBE_DOMAIN }}|g" \
+            > wrangler.toml
 
       - name: Install Dependencies
         run: npm install
