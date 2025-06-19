@@ -6,9 +6,12 @@ const BUILD_TIME = "2024-06-19";
 const MAX_SIZE = 100 * 1024 * 1024; // 100MB
 
 /**
- * Add security headers to all responses
- * @param {Headers} headers - The headers object to modify
- * @returns {Headers} The modified headers object
+ * Adds a comprehensive set of security headers to the provided Headers object.
+ * 
+ * The headers enforce HTTPS, prevent MIME sniffing and clickjacking, restrict referrer information, disable legacy XSS protection, prevent caching, and limit certain browser permissions.
+ * 
+ * @param {Headers} headers - The Headers object to which security headers will be added.
+ * @returns {Headers} The Headers object with security headers applied.
  */
 function addSecurityHeaders(headers) {
   // Force HTTPS for 2 years including subdomains and preload
@@ -32,10 +35,13 @@ function addSecurityHeaders(headers) {
 }
 
 /**
- * Create a response with security headers
- * @param {string|object} body - Response body (string or object)
- * @param {object} options - Response options
- * @returns {Response} The response object
+ * Constructs an HTTP response with strict security headers and appropriate content type.
+ * If the body is an object, it is JSON-stringified; otherwise, it is used as-is.
+ * Security headers are added to enforce HTTPS, prevent MIME sniffing, clickjacking, and caching.
+ * The default content type is set to "text/plain" unless specified in options.
+ * @param {string|object} body - The response body, either as a string or an object to be JSON-stringified.
+ * @param {object} [options] - Optional response settings, including status and headers.
+ * @returns {Response} The constructed HTTP response with security headers.
  */
 function createSecureResponse(body, options = {}) {
   const { status = 200, headers = new Headers() } = options;
@@ -61,7 +67,11 @@ function createSecureResponse(body, options = {}) {
 
 const EXPENSIVE = ["/speed", "/upload", "/echo"];
 const FREE_LIMITED = ["/ping", "/info", "/healthz", "/headers", "/version"];
-const RATE_LIMIT = 30; // requests per minute per IP
+const RATE_LIMIT = 30; /**
+ * Extracts Cloudflare-specific metadata from the provided `cf` object.
+ * @param {object} cf - The Cloudflare metadata object from the request.
+ * @return {object} An object containing colo, country, ASN, region, city, latitude, longitude, and timezone information.
+ */
 
 function getCfInfo(cf) {
   return {
