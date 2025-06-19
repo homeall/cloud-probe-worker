@@ -4,6 +4,11 @@ console.log('Test runner starting...');
 console.log('Node.js version:', process.version);
 console.log('Environment variables:', process.env);
 
+// Set up environment variables for testing
+process.env.VERSION = 'v1.0.0';
+process.env.GIT_COMMIT = 'test-commit-hash';
+process.env.BUILD_TIME = '2024-06-19';
+
 // Mock Cloudflare environment
 const mockEnv = {
   RATE_LIMIT_KV: {

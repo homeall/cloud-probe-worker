@@ -1,6 +1,21 @@
-import { fetch } from '../src/index.js';
+console.log('Starting test runner...');
+console.log('Node.js version:', process.version);
+
+// Import the fetch function from the source
+let fetch;
+try {
+  console.log('Importing fetch from src/index.js...');
+  const module = await import('../src/index.js');
+  fetch = module.fetch || module.default?.fetch || module.default;
+  if (!fetch) throw new Error('Could not find fetch function in module exports');
+  console.log('Successfully imported fetch function');
+} catch (error) {
+  console.error('Failed to import fetch function:', error);
+  process.exit(1);
+}
 
 // Mock Cloudflare environment
+console.log('Setting up mock environment...');
 const mockEnv = {
   RATE_LIMIT_KV: {
     get: () => Promise.resolve('0'),
@@ -24,7 +39,8 @@ const createRequest = (method, path, headers = {}, body = null) => {
     init.body = body;
   }
   const req = new Request(`https://example.com${path}`, init);
-  const ctx = { waitUntil: jest.fn() };
+  const waitUntil = () => {};
+  const ctx = { waitUntil };
   return { req, ctx };
 };
 
@@ -58,4 +74,14 @@ async function runTests() {
 }
 
 // Run the tests
-runTests().catch(console.error);
+console.log('Starting tests...');
+runTests()
+  .then(() => {
+    console.log('All tests completed successfully!');
+    process.exit(0);
+  })
+  .catch(error => {
+    console.error('Test suite failed:');
+    console.error(error);
+    process.exit(1);
+  });
