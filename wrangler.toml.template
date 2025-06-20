@@ -18,11 +18,11 @@ routes = [
   { pattern = "${PROBE_DOMAIN}", custom_domain = true }
 ]
 
+API_PROBE_TOKEN = "${API_PROBE_TOKEN}"
+
   [[env.production.kv_namespaces]]
   binding = "RATE_LIMIT_KV"
   id = "${RATE_LIMIT_KV_ID}"
-
-API_PROBE_TOKEN = "${API_PROBE_TOKEN}"
 
 [observability.logs]
 enabled = true
