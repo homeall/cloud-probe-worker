@@ -15,19 +15,10 @@ const mockEnv = {
   waitUntil: jest.fn()
 };
 
-// Mock global environment
+// Mock global environment (not used by the worker but kept for completeness)
 Object.defineProperty(globalThis, 'env', {
   value: mockEnv,
   writable: true
-});
-
-// Mock import.meta.env
-Object.defineProperty(import.meta, 'env', {
-  value: {
-    VERSION: 'test-version',
-    GIT_COMMIT: 'test-commit',
-    BUILD_TIME: '2024-06-19'
-  }
 });
 
 const createRequest = (method, path, headers = {}, body = null) => {

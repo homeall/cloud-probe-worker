@@ -1,20 +1,6 @@
 // Jest setup for ES modules
 
-// Mock import.meta.env for tests
-globalThis.import = new Proxy(globalThis.import, {
-  apply(target, thisArg, args) {
-    if (args[0] === 'meta') {
-      return Promise.resolve({
-        env: {
-          VERSION: 'test-version',
-          GIT_COMMIT: 'test-commit',
-          BUILD_TIME: '2024-06-19'
-        }
-      });
-    }
-    return target.apply(thisArg, args);
-  }
-});
+// No-op import.meta mock (tests pass env directly to worker)
 
 // Mock Cloudflare Workers types
 const mockEnv = {

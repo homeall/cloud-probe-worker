@@ -1,20 +1,8 @@
-// Handle environment variables for both Node.js and Cloudflare Workers
-const getEnv = () => {
-  // For Cloudflare Workers
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
-    return import.meta.env;
-  }
-  // For Node.js environment (testing)
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env;
-  }
-  return {};
-};
-
-const env = getEnv();
-const VERSION = env.VERSION || "v1.0.0";
-const GIT_COMMIT = env.GIT_COMMIT || "abcdef0";
-const BUILD_TIME = env.BUILD_TIME || new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+// Default values used when environment variables are not provided
+const DEFAULT_VERSION = 'v1.0.0';
+const DEFAULT_GIT_COMMIT = 'abcdef0';
+// YYYY-MM-DD format
+const DEFAULT_BUILD_TIME = new Date().toISOString().split('T')[0];
 
 /**
  * Adds a comprehensive set of security headers to the provided Headers object.
@@ -172,9 +160,9 @@ const workerFetch = async (request, env, ctx) => {
       if (request.method === "GET") {
         return createSecureResponse(
           {
-            version: env.VERSION || VERSION,
-            gitCommit: env.GIT_COMMIT || GIT_COMMIT,
-            buildTime: env.BUILD_TIME || BUILD_TIME,
+            version: env.VERSION || DEFAULT_VERSION,
+            gitCommit: env.GIT_COMMIT || DEFAULT_GIT_COMMIT,
+            buildTime: env.BUILD_TIME || DEFAULT_BUILD_TIME,
             cf: getCloudflareMetadata(request)
           },
           { headers: new Headers({ 'content-type': 'application/json' }) }
@@ -205,9 +193,9 @@ const workerFetch = async (request, env, ctx) => {
       if (request.method === "GET") {
         return createSecureResponse(
           {
-            version: env.VERSION || VERSION,
-            commit: env.GIT_COMMIT || GIT_COMMIT,
-            build: env.BUILD_TIME || BUILD_TIME,
+            version: env.VERSION || DEFAULT_VERSION,
+            commit: env.GIT_COMMIT || DEFAULT_GIT_COMMIT,
+            build: env.BUILD_TIME || DEFAULT_BUILD_TIME,
           },
           { headers: new Headers({ 'content-type': 'application/json' }) }
         );
