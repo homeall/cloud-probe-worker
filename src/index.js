@@ -172,9 +172,9 @@ const workerFetch = async (request, env, ctx) => {
       if (request.method === "GET") {
         return createSecureResponse(
           {
-            version: VERSION,
-            gitCommit: GIT_COMMIT,
-            buildTime: BUILD_TIME,
+            version: env.VERSION || VERSION,
+            gitCommit: env.GIT_COMMIT || GIT_COMMIT,
+            buildTime: env.BUILD_TIME || BUILD_TIME,
             cf: getCloudflareMetadata(request)
           },
           { headers: new Headers({ 'content-type': 'application/json' }) }
@@ -205,9 +205,9 @@ const workerFetch = async (request, env, ctx) => {
       if (request.method === "GET") {
         return createSecureResponse(
           {
-            version: VERSION,
-            commit: GIT_COMMIT,
-            build: BUILD_TIME,
+            version: env.VERSION || VERSION,
+            commit: env.GIT_COMMIT || GIT_COMMIT,
+            build: env.BUILD_TIME || BUILD_TIME,
           },
           { headers: new Headers({ 'content-type': 'application/json' }) }
         );
