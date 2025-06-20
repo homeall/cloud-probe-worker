@@ -135,7 +135,7 @@ const handleAuthentication = (path, token, validToken) => {
 /**
  * Main worker fetch handler
  */
-const workerFetch = async (request, env, ctx) => {
+const workerFetch = async (request, env) => {
   const url = new URL(request.url);
   const path = url.pathname;
   const token = request.headers.get("x-api-probe-token") || "";
