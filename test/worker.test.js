@@ -4,25 +4,16 @@ import worker from '../src/index.js';
 // describe, it, expect, beforeAll, afterEach, jest
 
 // Mock Cloudflare environment
+const mockKV = {
+  get: jest.fn(),
+  put: jest.fn().mockResolvedValue(undefined),
+};
+
 const mockEnv = {
-  RATE_LIMIT_KV: {
-    get: jest.fn(),
-    put: jest.fn().mockResolvedValue(undefined),
-  },
+  RATE_LIMIT_KV: mockKV,
   API_PROBE_TOKEN: 'test-token',
   waitUntil: jest.fn()
 };
-
-// Mock global objects
-const mockRequest = new Request('https://example.com', {
-  cf: {
-    colo: 'DFW',
-    country: 'US'
-  },
-  headers: {
-    'cf-connecting-ip': '127.0.0.1'
-  }
-});
 
 // Mock global environment
 Object.defineProperty(globalThis, 'env', {
@@ -69,7 +60,7 @@ describe('Cloud Probe Worker', () => {
     it('should return 200 with timestamp and cf info', async () => {
       const { req, ctx } = createRequest('GET', '/ping');
       req.cf = { colo: 'DFW', country: 'US' };
-      const res = await worker.fetch(req, env, ctx);
+      const res = await worker.fetch(req, mockEnv, ctx);
 
       expect(res.status).toBe(200);
       const data = await res.json();
@@ -86,7 +77,7 @@ describe('Cloud Probe Worker', () => {
         country: 'US',
         colo: 'DFW'
       };
-      const res = await worker.fetch(req, env, ctx);
+      const res = await worker.fetch(req, mockEnv, ctx);
 
       expect(res.status).toBe(200);
       const data = await res.json();
@@ -100,7 +91,7 @@ describe('Cloud Probe Worker', () => {
       mockKV.get.mockResolvedValueOnce('10'); // Current count
 
       const { req, ctx } = createRequest('GET', '/ping');
-      const res = await worker.fetch(req, env, ctx);
+      const res = await worker.fetch(req, mockEnv, ctx);
 
       expect(res.status).toBe(200);
       expect(mockKV.put).toHaveBeenCalled();
@@ -110,7 +101,7 @@ describe('Cloud Probe Worker', () => {
       mockKV.get.mockResolvedValueOnce('30'); // Over limit
 
       const { req, ctx } = createRequest('GET', '/ping');
-      const res = await worker.fetch(req, env, ctx);
+      const res = await worker.fetch(req, mockEnv, ctx);
 
       expect(res.status).toBe(429);
     });
@@ -119,7 +110,7 @@ describe('Cloud Probe Worker', () => {
   describe('Authentication', () => {
     it('should require token for protected endpoints', async () => {
       const { req, ctx } = createRequest('GET', '/speed');
-      const res = await worker.fetch(req, env, ctx);
+      const res = await worker.fetch(req, mockEnv, ctx);
 
       expect(res.status).toBe(401);
     });
@@ -130,7 +121,7 @@ describe('Cloud Probe Worker', () => {
       const { req, ctx } = createRequest('GET', '/speed', {
         'x-api-probe-token': 'test-token'
       });
-      const res = await worker.fetch(req, env, ctx);
+      const res = await worker.fetch(req, mockEnv, ctx);
 
       expect(res.status).toBe(200);
     });
@@ -143,7 +134,7 @@ describe('Cloud Probe Worker', () => {
       const { req, ctx } = createRequest('GET', '/speed?size=100', {
         'x-api-probe-token': 'test-token'
       });
-      const res = await worker.fetch(req, env, ctx);
+      const res = await worker.fetch(req, mockEnv, ctx);
 
       expect(res.status).toBe(200);
     });
