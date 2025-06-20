@@ -22,5 +22,10 @@ routes = [
   binding = "RATE_LIMIT_KV"
   id = "${RATE_LIMIT_KV_ID}"
 
+  API_PROBE_TOKEN = "${API_PROBE_TOKEN}"
+
+[observability.logs]
+enabled = true
+
 [dev]
 port = 8787
