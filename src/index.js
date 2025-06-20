@@ -83,9 +83,12 @@ const handleRateLimiting = async (path, ip, env) => {
   }
 
   const key = `rate_limit:${ip}:${path}`;
-  const count = await env.RATE_LIMIT_KV.get(key, 'number') || 0;
 
-  if (count >= RATE_LIMIT) {
+  // Fetch current count (stored as string). Default to 0 if not set.
+  const current = parseInt(await env.RATE_LIMIT_KV.get(key) || '0', 10);
+  const next = current + 1;
+
+  if (next > RATE_LIMIT) {
     return {
       error: true,
       response: createSecureResponse(
@@ -95,7 +98,8 @@ const handleRateLimiting = async (path, ip, env) => {
     };
   }
 
-  await env.RATE_LIMIT_KV.atomic(key).increment(1).expire(RATE_LIMIT_WINDOW);
+  // Store the updated count with a TTL so it resets automatically.
+  await env.RATE_LIMIT_KV.put(key, next.toString(), { expirationTtl: RATE_LIMIT_WINDOW });
   return { error: false };
 };
 
