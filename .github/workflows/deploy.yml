@@ -23,17 +23,16 @@ jobs:
           node-version: '24.x'
 
       - name: Generate wrangler.toml from template
-        run: |
-          cat wrangler.toml.template \
-            | sed "s|\${CF_ACCOUNT_ID}|${{ secrets.CF_ACCOUNT_ID }}|g" \
-            | sed "s|\${RATE_LIMIT_KV_ID}|${{ secrets.RATE_LIMIT_KV_ID }}|g" \
-            | sed "s|\${ZONE_ID}|${{ secrets.ZONE_ID }}|g" \
-            | sed "s|\${PROBE_DOMAIN}|${{ secrets.PROBE_DOMAIN }}|g" \
-            | sed "s|\${API_PROBE_TOKEN}|${{ secrets.API_PROBE_TOKEN }}|g" \
-            | sed "s|\${VERSION}|${{ github.ref_name }}|g" \
-            | sed "s|\${GIT_COMMIT}|${{ github.sha }}|g" \
-            | sed "s|\${BUILD_TIME}|${{ github.run_id }}|g" \
-            > wrangler.toml
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          RATE_LIMIT_KV_ID: ${{ secrets.RATE_LIMIT_KV_ID }}
+          ZONE_ID: ${{ secrets.ZONE_ID }}
+          PROBE_DOMAIN: ${{ secrets.PROBE_DOMAIN }}
+          API_PROBE_TOKEN: ${{ secrets.API_PROBE_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+          GIT_COMMIT: ${{ github.sha }}
+          BUILD_TIME: ${{ github.run_id }}
+        run: envsubst < wrangler.toml.template > wrangler.toml
 
       - name: Install Dependencies
         run: npm install
