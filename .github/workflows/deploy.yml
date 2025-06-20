@@ -31,7 +31,7 @@ jobs:
 
       - name: Generate wrangler.toml from template
         run: |
-          cat .wrangler.toml.template \
+          cat wrangler.toml.template \
             | sed "s|\${CF_ACCOUNT_ID}|${{ secrets.CF_ACCOUNT_ID }}|g" \
             | sed "s|\${RATE_LIMIT_KV_ID}|${{ secrets.RATE_LIMIT_KV_ID }}|g" \
             | sed "s|\${ZONE_ID}|${{ secrets.ZONE_ID }}|g" \
