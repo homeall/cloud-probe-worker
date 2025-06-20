@@ -85,7 +85,7 @@ const RATE_LIMIT_WINDOW = 60; // seconds
 /**
  * Handle rate limiting
  */
-const handleRateLimiting = async (path, ip, env, ctx) => {
+const handleRateLimiting = async (path, ip, env) => {
   if (!FREE_LIMITED.includes(path) && !EXPENSIVE.includes(path)) {
     return { error: false };
   }
@@ -171,7 +171,12 @@ const workerFetch = async (request, env, ctx) => {
     case "/info":
       if (request.method === "GET") {
         return createSecureResponse(
-          getCloudflareMetadata(request),
+          {
+            version: VERSION,
+            gitCommit: GIT_COMMIT,
+            buildTime: BUILD_TIME,
+            cf: getCloudflareMetadata(request)
+          },
           { headers: new Headers({ 'content-type': 'application/json' }) }
         );
       }
@@ -187,7 +192,16 @@ const workerFetch = async (request, env, ctx) => {
       }
       break;
 
-    case "/version":
+    case "/healthz":
+       if (request.method === "GET") {
+         return createSecureResponse(
+           { status: "ok" },
+           { headers: new Headers({ 'content-type': 'application/json' }) }
+         );
+       }
+       break;
+
+     case "/version":
       if (request.method === "GET") {
         return createSecureResponse(
           {
@@ -251,11 +265,13 @@ const workerFetch = async (request, env, ctx) => {
   );
 };
 
-// Register event handler
-addEventListener('fetch', event => {
-  event.respondWith(workerFetch(event.request, event.env, event.ctx))
-});
-
-// Exports
+// Export the fetch handler directly for testing
 export default workerFetch;
 export { workerFetch };
+
+// Register event handler for production
+if (typeof addEventListener !== 'undefined') {
+  addEventListener('fetch', event => {
+    event.respondWith(workerFetch(event.request, event.env, event.ctx))
+  });
+}
