@@ -29,6 +29,10 @@ jobs:
             | sed "s|\${RATE_LIMIT_KV_ID}|${{ secrets.RATE_LIMIT_KV_ID }}|g" \
             | sed "s|\${ZONE_ID}|${{ secrets.ZONE_ID }}|g" \
             | sed "s|\${PROBE_DOMAIN}|${{ secrets.PROBE_DOMAIN }}|g" \
+            | sed "s|\${API_PROBE_TOKEN}|${{ secrets.API_PROBE_TOKEN }}|g" \
+            | sed "s|\${VERSION}|${{ github.ref_name }}|g" \
+            | sed "s|\${GIT_COMMIT}|${{ github.sha }}|g" \
+            | sed "s|\${BUILD_TIME}|${{ github.run_id }}|g" \
             > wrangler.toml
 
       - name: Install Dependencies
@@ -49,11 +53,5 @@ jobs:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           command: deploy
           environment: 'production'
-        env:
-          RATE_LIMIT_KV_ID: ${{ secrets.RATE_LIMIT_KV_ID }}
-          API_PROBE_TOKEN: ${{ secrets.API_PROBE_TOKEN }}
-          VERSION: ${{ github.ref_name }}
-          GIT_COMMIT: ${{ github.sha }}
-          BUILD_TIME: ${{ github.event_name }}-${{ github.run_number }}-${{ github.run_id }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
 
