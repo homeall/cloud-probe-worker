@@ -231,13 +231,36 @@ const workerFetch = async (request, env) => {
 
     case "/speed":
       if (request.method === "GET") {
-        const size = parseInt(request.url.split('?')[1]?.split('=')[1]) || 1000;
-        const data = new Uint8Array(size).fill(42);
-        return createSecureResponse(data, {
-          status: 200,
+        const params = new URLSearchParams(url.search);
+        const sizeParam = parseInt(params.get('size') || '1000000', 10); // default 1 MB
+        const pattern = params.get('pattern') || 'asterisk';
+        const MAX_SIZE = 100 * 1024 * 1024; // 100 MB cap
+
+        if (isNaN(sizeParam) || sizeParam <= 0 || sizeParam > MAX_SIZE) {
+          return createSecureResponse(
+            { error: `Invalid size. Must be 1-${MAX_SIZE} bytes.` },
+            { status: 400, headers: new Headers({ 'content-type': 'application/json' }) }
+          );
+        }
+
+        let buffer;
+        switch (pattern) {
+          case 'zero':
+            buffer = new Uint8Array(sizeParam); // filled with 0 by default
+            break;
+          case 'rand':
+            buffer = new Uint8Array(sizeParam);
+            crypto.getRandomValues(buffer);
+            break;
+          default: // 'asterisk'
+            buffer = new Uint8Array(sizeParam).fill(42); // ASCII '*'
+            break;
+        }
+
+        return createSecureResponse(buffer, {
           headers: new Headers({
             'content-type': 'application/octet-stream',
-            'content-length': size.toString()
+            'content-length': sizeParam.toString()
           })
         });
       }
