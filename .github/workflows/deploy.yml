@@ -50,7 +50,7 @@ jobs:
           NODE_ENV: test
 
       - name: Deploy to Cloudflare Workers
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+#        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}

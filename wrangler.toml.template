@@ -6,11 +6,6 @@ compatibility_flags = ["nodejs_compat"]
 
 [build]
 command = "npm install"
-output_format = "esm"
-target = "service-worker"
-
-[triggers]
-crons = ["*/5 * * * *"]
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
@@ -18,8 +13,10 @@ id = "${RATE_LIMIT_KV_ID}"
 
 [env.production]
 workers_dev = false
-route = "${PROBE_DOMAIN}/*"
 zone_id = "${ZONE_ID}"
+routes = [
+  { pattern = "${PROBE_DOMAIN}", custom_domain = true }
+]
 
   [[env.production.kv_namespaces]]
   binding = "RATE_LIMIT_KV"
