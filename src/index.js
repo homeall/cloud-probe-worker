@@ -232,6 +232,7 @@ const workerFetch = async (request, env) => {
     case "/speed":
       if (request.method === "GET") {
         const params = new URLSearchParams(url.search);
+        const metaOnly = params.has('meta');
         const sizeParam = parseInt(params.get('size') || '1000000', 10); // default 1 MB
         const pattern = params.get('pattern') || 'asterisk';
         const MAX_SIZE = 100 * 1024 * 1024; // 100 MB cap
@@ -243,14 +244,29 @@ const workerFetch = async (request, env) => {
           );
         }
 
+        // If only metadata requested, return JSON description
+        if (metaOnly) {
+          const meta = {
+            bytes: sizeParam,
+            kibibytes: +(sizeParam / 1024).toFixed(2),
+            mebibytes: +(sizeParam / 1048576).toFixed(2),
+            pattern
+          };
+          return createSecureResponse(meta, { headers: new Headers({ 'content-type': 'application/json' }) });
+        }
+
         let buffer;
         switch (pattern) {
           case 'zero':
-            buffer = new Uint8Array(sizeParam); // filled with 0 by default
+            buffer = new Uint8Array(sizeParam); // auto-filled with zeros
             break;
           case 'rand':
             buffer = new Uint8Array(sizeParam);
-            crypto.getRandomValues(buffer);
+            // Cloudflare crypto.getRandomValues max 65536 bytes per call
+            const CHUNK = 65536;
+            for (let offset = 0; offset < sizeParam; offset += CHUNK) {
+              crypto.getRandomValues(buffer.subarray(offset, Math.min(offset + CHUNK, sizeParam)));
+            }
             break;
           default: // 'asterisk'
             buffer = new Uint8Array(sizeParam).fill(42); // ASCII '*'
