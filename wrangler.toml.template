@@ -19,6 +19,9 @@ routes = [
 ]
 
 API_PROBE_TOKEN = "${API_PROBE_TOKEN}"
+VERSION = "${VERSION}"
+GIT_COMMIT = "${GIT_COMMIT}"
+BUILD_TIME = "${BUILD_TIME}"
 
   [[env.production.kv_namespaces]]
   binding = "RATE_LIMIT_KV"
