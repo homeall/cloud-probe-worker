@@ -108,6 +108,75 @@ Error responses follow the format:
 
 ## Usage
 
+Below are ready-to-copy curl snippets for every endpoint. Replace `<your-worker>` with your deployed hostname and set `API_PROBE_TOKEN` in your shell.
+
+### 🩺 Health check
+```sh
+curl -s https://<your-worker>.workers.dev/healthz
+```
+
+### 📶 Latency / jitter (`/ping`)
+```sh
+curl -s https://<your-worker>.workers.dev/ping | jq
+```
+
+### 📥 Download speed test (`/speed`)
+1. Metadata only (no large transfer):
+```sh
+curl -s "https://<your-worker>.workers.dev/speed?size=5000000&pattern=rand&meta" | jq
+```
+2. Actual speed test (requires API token; measures Mbps locally):
+```sh
+speed_bps=$(curl -s -H "x-api-probe-token:$API_PROBE_TOKEN" \
+  "https://<your-worker>.workers.dev/speed?size=5000000&pattern=rand" \
+  -o /dev/null -w "%{speed_download}")
+
+echo "Download: $(echo "scale=2; $speed_bps*8/1000000" | bc) Mb/s"
+```
+Parameters:
+* `size`  – bytes (1-104857600)
+* `pattern` – `zero` / `rand` / `asterisk`
+* `meta` flag – if present, returns JSON instead of data
+
+### 📤 Upload speed test (`/upload`)
+1. Zero-filled 10 MB buffer:
+```sh
+dd if=/dev/zero bs=1m count=10 2>/dev/null | \
+curl -s -X POST "https://<your-worker>.workers.dev/upload" \
+  -H "x-api-probe-token:$API_PROBE_TOKEN" \
+  --data-binary @- -o /dev/null -w "Upload: %{speed_upload}B/s\n"
+```
+2. Random 5 MB buffer:
+```sh
+dd if=/dev/urandom bs=1m count=5 2>/dev/null | \
+curl -s -X POST "https://<your-worker>.workers.dev/upload" \
+  -H "x-api-probe-token:$API_PROBE_TOKEN" \
+  --data-binary @- -o /dev/null -w "Upload: %{speed_upload}B/s\n"
+```
+
+### 🔎 Edge & client info (`/info`)
+```sh
+curl -s https://<your-worker>.workers.dev/info | jq
+```
+
+### 📰 All request headers (`/headers`)
+```sh
+curl -s https://<your-worker>.workers.dev/headers | jq
+```
+
+### 🛠  Worker version (`/version`)
+```sh
+curl -s https://<your-worker>.workers.dev/version | jq
+```
+
+### 🔁 Echo service (`/echo`)
+```sh
+curl -s -X POST https://<your-worker>.workers.dev/echo \
+  -H "x-api-probe-token:$API_PROBE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"hello":"world"}' | jq
+```
+
 After deployment, access the endpoints via your worker URL. For example:
 ```sh
 # Get metadata (no large download)
