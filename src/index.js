@@ -1,5 +1,3 @@
-// cloud-probe-worker/src/index.js
-
 // Handle environment variables for both Node.js and Cloudflare Workers
 const getEnv = () => {
   // For Cloudflare Workers
@@ -10,7 +8,6 @@ const getEnv = () => {
   if (typeof process !== 'undefined' && process.env) {
     return process.env;
   }
-  // Fallback
   return {};
 };
 
@@ -21,71 +18,46 @@ const BUILD_TIME = env.BUILD_TIME || new Date().toISOString().split('T')[0]; // 
 
 /**
  * Adds a comprehensive set of security headers to the provided Headers object.
- * 
- * The headers enforce HTTPS, prevent MIME sniffing and clickjacking, restrict referrer information, disable legacy XSS protection, prevent caching, and limit certain browser permissions.
+ * The headers enforce HTTPS, prevent MIME sniffing and clickjacking, restrict referrer information,
+ * disable legacy XSS protection, prevent caching, and limit certain browser permissions.
  * 
  * @param {Headers} headers - The Headers object to which security headers will be added.
  * @returns {Headers} The Headers object with security headers applied.
  */
-function addSecurityHeaders(headers) {
-  // Force HTTPS for 2 years including subdomains and preload
-  headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
-  // Prevent MIME type sniffing
-  headers.set("X-Content-Type-Options", "nosniff");
-  // Prevent clickjacking
-  headers.set("X-Frame-Options", "DENY");
-  // Control referrer information
-  headers.set("Referrer-Policy", "no-referrer");
-  // Disable XSS filter (modern browsers have better XSS protection)
-  headers.set("X-XSS-Protection", "0");
-  // Prevent caching of sensitive data
-  headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-  headers.set("Pragma", "no-cache");
-  headers.set("Expires", "0");
-  // Additional security headers
-  headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  
+const addSecurityHeaders = (headers) => {
+  headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('X-Frame-Options', 'DENY');
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  headers.set('X-XSS-Protection', '0');
+  headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  headers.set('Pragma', 'no-cache');
+  headers.set('Expires', '0');
+  headers.set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
   return headers;
-}
+};
 
 /**
  * Constructs an HTTP response with strict security headers and appropriate content type.
  * If the body is an object, it is JSON-stringified; otherwise, it is used as-is.
  * Security headers are added to enforce HTTPS, prevent MIME sniffing, clickjacking, and caching.
  * The default content type is set to "text/plain" unless specified in options.
+ * 
  * @param {string|object} body - The response body, either as a string or an object to be JSON-stringified.
  * @param {object} [options] - Optional response settings, including status and headers.
  * @returns {Response} The constructed HTTP response with security headers.
  */
-function createSecureResponse(body, options = {}) {
-  const { status = 200, headers = new Headers() } = options;
-  
-  // Add security headers
+const createSecureResponse = (body, options = {}) => {
+  const headers = new Headers(options.headers || {});
   addSecurityHeaders(headers);
-  
-  // Handle Uint8Array as binary data
-  if (body instanceof Uint8Array) {
-    return new Response(body, {
-      status,
-      headers
-    });
+
+  if (typeof body === 'object') {
+    headers.set('content-type', options.headers?.['content-type'] || 'application/json');
+    return new Response(JSON.stringify(body), { ...options, headers });
   }
-  
-  // Set default content type if not specified
-  if (!headers.has('content-type')) {
-    headers.set('content-type', 'text/plain');
-  }
-  
-  // Stringify if body is an object
-  const responseBody = typeof body === 'object' 
-    ? JSON.stringify(body, null, 2) 
-    : body;
-    
-  return new Response(responseBody, {
-    status,
-    headers
-  });
-}
+
+  return new Response(body, { ...options, headers });
+};
 
 /**
  * Extracts Cloudflare-specific metadata from the provided request.
@@ -93,63 +65,76 @@ function createSecureResponse(body, options = {}) {
  * @return {object} An object containing Cloudflare metadata and request info.
  */
 const getCloudflareMetadata = (request) => {
-  const cf = request.cf || {};
+  const { cf = {} } = request;
   return {
-    ip: request.headers.get("cf-connecting-ip") || null,
-    asn: cf.asn || null,
-    city: cf.city || null,
-    region: cf.region || null,
-    country: cf.country || null,
-    latitude: cf.latitude || null,
-    longitude: cf.longitude || null,
-    timezone: cf.timezone || null,
-    colo: cf.colo || null,
-    user_agent: request.headers.get("user-agent") || null,
-    traceparent: request.headers.get("traceparent") || null,
+    ip: request.headers.get('cf-connecting-ip') || 'unknown',
+    asn: cf.asn || 'unknown',
+    region: cf.region || 'unknown',
+    user_agent: request.headers.get('user-agent') || 'unknown',
+    traceparent: request.headers.get('traceparent') || 'unknown',
+    ...cf
   };
 };
 
 // Constants
-const EXPENSIVE = ["/speed", "/upload", "/echo"];
-const FREE_LIMITED = ["/ping", "/info", "/healthz", "/headers", "/version"];
+const EXPENSIVE = ['/speed', '/upload', '/echo'];
+const FREE_LIMITED = ['/ping', '/info', '/healthz', '/headers', '/version'];
 const RATE_LIMIT = 30;
+const RATE_LIMIT_WINDOW = 60; // seconds
 
-// Handle rate limiting
+/**
+ * Handle rate limiting
+ */
 const handleRateLimiting = async (path, ip, env, ctx) => {
-  if (FREE_LIMITED.includes(path) && env.RATE_LIMIT_KV) {
-    const now = Math.floor(Date.now() / 60000); // current minute
-    const kvKey = `rl:${ip}:${path}:${now}`;
-    let count = parseInt(await env.RATE_LIMIT_KV.get(kvKey)) || 0;
-    if (count >= RATE_LIMIT) {
-      return {
-        error: true,
-        response: createSecureResponse(
-          { error: "Too Many Requests" },
-          { status: 429, headers: new Headers({ 'content-type': 'application/json' }) }
-        )
-      };
-    }
-    ctx.waitUntil(env.RATE_LIMIT_KV.put(kvKey, (count + 1).toString(), { expirationTtl: 120 }));
+  if (!FREE_LIMITED.includes(path) && !EXPENSIVE.includes(path)) {
+    return { error: false };
   }
+
+  if (FREE_LIMITED.includes(path)) {
+    return { error: false };
+  }
+
+  const key = `rate_limit:${ip}:${path}`;
+  const count = await env.RATE_LIMIT_KV.get(key, 'number') || 0;
+
+  if (count >= RATE_LIMIT) {
+    return {
+      error: true,
+      response: createSecureResponse(
+        { error: 'Rate limit exceeded' },
+        { status: 429, headers: new Headers({ 'Retry-After': RATE_LIMIT_WINDOW.toString() }) }
+      )
+    };
+  }
+
+  await env.RATE_LIMIT_KV.atomic(key).increment(1).expire(RATE_LIMIT_WINDOW);
   return { error: false };
 };
 
-// Handle authentication
+/**
+ * Handle authentication
+ */
 const handleAuthentication = (path, token, validToken) => {
-  if (EXPENSIVE.includes(path)) {
-    if (!token || token !== validToken) {
-      return {
-        error: true,
-        response: createSecureResponse(
-          { error: "Unauthorized: missing or invalid token" },
-          { status: 401, headers: new Headers({ 'content-type': 'application/json' }) }
-        )
-      };
-    }
+  if (!EXPENSIVE.includes(path)) {
+    return { error: false };
   }
-  return { error: false };
+
+  if (token === validToken) {
+    return { error: false };
+  }
+
+  return {
+    error: true,
+    response: createSecureResponse(
+      { error: 'Unauthorized' },
+      { status: 401, headers: new Headers({ 'WWW-Authenticate': 'Bearer' }) }
+    )
+  };
 };
 
+/**
+ * Main worker fetch handler
+ */
 const workerFetch = async (request, env, ctx) => {
   const url = new URL(request.url);
   const path = url.pathname;
@@ -257,7 +242,6 @@ const workerFetch = async (request, env, ctx) => {
         );
       }
       break;
-    } // This brace closes the case block
   }
 
   // Default: 404
@@ -267,10 +251,11 @@ const workerFetch = async (request, env, ctx) => {
   );
 };
 
+// Register event handler
 addEventListener('fetch', event => {
   event.respondWith(workerFetch(event.request, event.env, event.ctx))
 });
 
+// Exports
 export default workerFetch;
 export { workerFetch };
-
