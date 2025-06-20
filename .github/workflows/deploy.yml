@@ -37,6 +37,15 @@ jobs:
             | sed "s|\${ZONE_ID}|${{ secrets.ZONE_ID }}|g" \
             | sed "s|\${PROBE_DOMAIN}|${{ secrets.PROBE_DOMAIN }}|g" \
             > wrangler.toml
+            
+      - name: Show wrangler.toml non-secret info
+        run: |
+          echo "Sections present in wrangler.toml:"
+          grep '^\[' wrangler.toml || true
+          echo "Name: $(grep '^name =' wrangler.toml || true)"
+          echo "Main: $(grep '^main =' wrangler.toml || true)"
+          echo "Account: $(grep '^account_id =' wrangler.toml | cut -c1-20)..."
+          echo "Route: $(grep '^route =' wrangler.toml || true)"
 
       - name: Install Dependencies
         run: npm install
