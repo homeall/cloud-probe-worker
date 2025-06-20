@@ -22,6 +22,12 @@ jobs:
         with:
           node-version: '24.x'
 
+      - name: Generate metadata
+        id: meta
+        run: |
+          echo "short_sha=$(git rev-parse --short $GITHUB_SHA)" >> $GITHUB_OUTPUT
+          echo "build_date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
       - name: Generate wrangler.toml from template
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -30,8 +36,8 @@ jobs:
           PROBE_DOMAIN: ${{ secrets.PROBE_DOMAIN }}
           API_PROBE_TOKEN: ${{ secrets.API_PROBE_TOKEN }}
           VERSION: ${{ github.ref_name }}
-          GIT_COMMIT: ${{ github.sha }}
-          BUILD_TIME: ${{ github.run_id }}
+          GIT_COMMIT: ${{ steps.meta.outputs.short_sha }}
+          BUILD_TIME: ${{ steps.meta.outputs.build_date }}
         run: envsubst < wrangler.toml.template > wrangler.toml
 
       - name: Install Dependencies
