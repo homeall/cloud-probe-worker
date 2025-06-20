@@ -22,7 +22,6 @@ const INTERVAL = 200; // ms between requests
 
 // Statistics
 const latencies = [];
-let completed = 0;
 let startTime = Date.now();
 
 // Create readline interface for progress updates
