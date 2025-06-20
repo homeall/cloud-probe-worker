@@ -6,8 +6,6 @@ compatibility_flags = ["nodejs_compat"]
 
 [build]
 command = "npm install"
-output_format = "esm"
-target = "service-worker"
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
