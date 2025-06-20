@@ -11,6 +11,7 @@ command = "npm install"
 binding = "RATE_LIMIT_KV"
 id = "${RATE_LIMIT_KV_ID}"
 
+
 [env.production]
 workers_dev = false
 zone_id = "${ZONE_ID}"
@@ -18,9 +19,18 @@ routes = [
   { pattern = "${PROBE_DOMAIN}", custom_domain = true }
 ]
 
+[env.production.vars]
+API_PROBE_TOKEN = "${API_PROBE_TOKEN}"
+VERSION = "${VERSION}"
+GIT_COMMIT = "${GIT_COMMIT}"
+BUILD_TIME = "${BUILD_TIME}"
+
   [[env.production.kv_namespaces]]
   binding = "RATE_LIMIT_KV"
   id = "${RATE_LIMIT_KV_ID}"
+
+[observability.logs]
+enabled = true
 
 [dev]
 port = 8787

@@ -1,26 +1,14 @@
-// Handle environment variables for both Node.js and Cloudflare Workers
-const getEnv = () => {
-  // For Cloudflare Workers
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
-    return import.meta.env;
-  }
-  // For Node.js environment (testing)
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env;
-  }
-  return {};
-};
-
-const env = getEnv();
-const VERSION = env.VERSION || "v1.0.0";
-const GIT_COMMIT = env.GIT_COMMIT || "abcdef0";
-const BUILD_TIME = env.BUILD_TIME || new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+// Default values used when environment variables are not provided
+const DEFAULT_VERSION = 'v1.0.0';
+const DEFAULT_GIT_COMMIT = 'abcdef0';
+// YYYY-MM-DD format
+const DEFAULT_BUILD_TIME = new Date().toISOString().split('T')[0];
 
 /**
  * Adds a comprehensive set of security headers to the provided Headers object.
  * The headers enforce HTTPS, prevent MIME sniffing and clickjacking, restrict referrer information,
  * disable legacy XSS protection, prevent caching, and limit certain browser permissions.
- * 
+ *
  * @param {Headers} headers - The Headers object to which security headers will be added.
  * @returns {Headers} The Headers object with security headers applied.
  */
@@ -42,7 +30,7 @@ const addSecurityHeaders = (headers) => {
  * If the body is an object, it is JSON-stringified; otherwise, it is used as-is.
  * Security headers are added to enforce HTTPS, prevent MIME sniffing, clickjacking, and caching.
  * The default content type is set to "text/plain" unless specified in options.
- * 
+ *
  * @param {string|object} body - The response body, either as a string or an object to be JSON-stringified.
  * @param {object} [options] - Optional response settings, including status and headers.
  * @returns {Response} The constructed HTTP response with security headers.
@@ -50,6 +38,14 @@ const addSecurityHeaders = (headers) => {
 const createSecureResponse = (body, options = {}) => {
   const headers = new Headers(options.headers || {});
   addSecurityHeaders(headers);
+
+  // If body is binary data (ArrayBuffer or any TypedArray), return as-is
+  if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+    if (!headers.has('content-type')) {
+      headers.set('content-type', 'application/octet-stream');
+    }
+    return new Response(body, { ...options, headers });
+  }
 
   if (typeof body === 'object') {
     headers.set('content-type', options.headers?.['content-type'] || 'application/json');
@@ -95,9 +91,12 @@ const handleRateLimiting = async (path, ip, env) => {
   }
 
   const key = `rate_limit:${ip}:${path}`;
-  const count = await env.RATE_LIMIT_KV.get(key, 'number') || 0;
 
-  if (count >= RATE_LIMIT) {
+  // Fetch current count (stored as string). Default to 0 if not set.
+  const current = parseInt(await env.RATE_LIMIT_KV.get(key) || '0', 10);
+  const next = current + 1;
+
+  if (next > RATE_LIMIT) {
     return {
       error: true,
       response: createSecureResponse(
@@ -107,7 +106,8 @@ const handleRateLimiting = async (path, ip, env) => {
     };
   }
 
-  await env.RATE_LIMIT_KV.atomic(key).increment(1).expire(RATE_LIMIT_WINDOW);
+  // Store the updated count with a TTL so it resets automatically.
+  await env.RATE_LIMIT_KV.put(key, next.toString(), { expirationTtl: RATE_LIMIT_WINDOW });
   return { error: false };
 };
 
@@ -135,7 +135,7 @@ const handleAuthentication = (path, token, validToken) => {
 /**
  * Main worker fetch handler
  */
-const workerFetch = async (request, env, ctx) => {
+const workerFetch = async (request, env) => {
   const url = new URL(request.url);
   const path = url.pathname;
   const token = request.headers.get("x-api-probe-token") || "";
@@ -148,7 +148,7 @@ const workerFetch = async (request, env, ctx) => {
   if (authResult.error) return authResult.response;
 
   // Handle rate limiting
-  const rateLimitResult = await handleRateLimiting(path, ip, env, ctx);
+  const rateLimitResult = await handleRateLimiting(path, ip, env);
   if (rateLimitResult.error) return rateLimitResult.response;
 
   // Echo traceparent header if present
@@ -172,9 +172,9 @@ const workerFetch = async (request, env, ctx) => {
       if (request.method === "GET") {
         return createSecureResponse(
           {
-            version: VERSION,
-            gitCommit: GIT_COMMIT,
-            buildTime: BUILD_TIME,
+            version: env.VERSION || DEFAULT_VERSION,
+            gitCommit: env.GIT_COMMIT || DEFAULT_GIT_COMMIT,
+            buildTime: env.BUILD_TIME || DEFAULT_BUILD_TIME,
             cf: getCloudflareMetadata(request)
           },
           { headers: new Headers({ 'content-type': 'application/json' }) }
@@ -205,9 +205,9 @@ const workerFetch = async (request, env, ctx) => {
       if (request.method === "GET") {
         return createSecureResponse(
           {
-            version: VERSION,
-            commit: GIT_COMMIT,
-            build: BUILD_TIME,
+            version: env.VERSION || DEFAULT_VERSION,
+            commit: env.GIT_COMMIT || DEFAULT_GIT_COMMIT,
+            build: env.BUILD_TIME || DEFAULT_BUILD_TIME,
           },
           { headers: new Headers({ 'content-type': 'application/json' }) }
         );
@@ -231,13 +231,52 @@ const workerFetch = async (request, env, ctx) => {
 
     case "/speed":
       if (request.method === "GET") {
-        const size = parseInt(request.url.split('?')[1]?.split('=')[1]) || 1000;
-        const data = new Uint8Array(size).fill(42);
-        return createSecureResponse(data, {
-          status: 200,
+        const params = new URLSearchParams(url.search);
+        const metaOnly = params.has('meta');
+        const sizeParam = parseInt(params.get('size') || '1000000', 10); // default 1 MB
+        const pattern = params.get('pattern') || 'asterisk';
+        const MAX_SIZE = 100 * 1024 * 1024; // 100 MB cap
+
+        if (isNaN(sizeParam) || sizeParam <= 0 || sizeParam > MAX_SIZE) {
+          return createSecureResponse(
+            { error: `Invalid size. Must be 1-${MAX_SIZE} bytes.` },
+            { status: 400, headers: new Headers({ 'content-type': 'application/json' }) }
+          );
+        }
+
+        // If only metadata requested, return JSON description
+        if (metaOnly) {
+          const meta = {
+            bytes: sizeParam,
+            kibibytes: +(sizeParam / 1024).toFixed(2),
+            mebibytes: +(sizeParam / 1048576).toFixed(2),
+            pattern
+          };
+          return createSecureResponse(meta, { headers: new Headers({ 'content-type': 'application/json' }) });
+        }
+
+        let buffer;
+        switch (pattern) {
+          case 'zero':
+            buffer = new Uint8Array(sizeParam); // auto-filled with zeros
+            break;
+          case 'rand':
+            buffer = new Uint8Array(sizeParam);
+            // Cloudflare crypto.getRandomValues max 65536 bytes per call
+            var CHUNK = 65536;
+            for (let offset = 0; offset < sizeParam; offset += CHUNK) {
+              crypto.getRandomValues(buffer.subarray(offset, Math.min(offset + CHUNK, sizeParam)));
+            }
+            break;
+          default: // 'asterisk'
+            buffer = new Uint8Array(sizeParam).fill(42); // ASCII '*'
+            break;
+        }
+
+        return createSecureResponse(buffer, {
           headers: new Headers({
             'content-type': 'application/octet-stream',
-            'content-length': size.toString()
+            'content-length': sizeParam.toString()
           })
         });
       }

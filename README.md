@@ -23,7 +23,7 @@ Basic information about the API and available endpoints.
 | Endpoint | Method | Authentication | Description |
 |----------|--------|----------------|-------------|
 | `/ping` | GET | 🔄 Rate-limited (30/min/IP) | Get latency/jitter + edge information |
-| `/speed` | GET | 🔑 API token | Download speed test (max 100MB). Query params: `size` (bytes), `pattern` (zero/rand) |
+| `/speed` | GET | 🔑 API token | Download speed test (max 100MB). Query params: `size` (bytes), `pattern` (zero/rand/asterisk), `meta` (flag to return JSON metadata instead of data) |
 | `/upload` | POST | 🔑 API token | Upload speed test (max 100MB) |
 | `/info` | GET | 🔄 Rate-limited (30/min/IP) | Detailed edge POP and geo information |
 | `/headers` | GET | 🔄 Rate-limited (30/min/IP) | Returns all request headers |
@@ -108,7 +108,92 @@ Error responses follow the format:
 
 ## Usage
 
+Below are ready-to-copy curl snippets for every endpoint. Replace `<your-worker>` with your deployed hostname and set `API_PROBE_TOKEN` in your shell.
+
+### 🩺 Health check
+```sh
+curl -s https://<your-worker>.workers.dev/healthz
+```
+
+### 📶 Latency / jitter (`/ping`)
+```sh
+curl -s https://<your-worker>.workers.dev/ping | jq
+```
+
+### 📥 Download speed test (`/speed`)
+1. Metadata only (no large transfer):
+```sh
+curl -s "https://<your-worker>.workers.dev/speed?size=5000000&pattern=rand&meta" | jq
+```
+2. Actual speed test (requires API token; measures Mbps locally):
+```sh
+speed_bps=$(curl -s -H "x-api-probe-token:$API_PROBE_TOKEN" \
+  "https://<your-worker>.workers.dev/speed?size=5000000&pattern=rand" \
+  -o /dev/null -w "%{speed_download}")
+
+echo "Download: $(echo "scale=2; $speed_bps*8/1000000" | bc) Mb/s"
+```
+Parameters:
+* `size`  – bytes (1-104857600)
+* `pattern` – `zero` / `rand` / `asterisk`
+* `meta` flag – if present, returns JSON instead of data
+
+### 📤 Upload speed test (`/upload`)
+1. Zero-filled 10 MB buffer:
+```sh
+dd if=/dev/zero bs=1m count=10 2>/dev/null | \
+curl -s -X POST "https://<your-worker>.workers.dev/upload" \
+  -H "x-api-probe-token:$API_PROBE_TOKEN" \
+  --data-binary @- -o /dev/null -w "Upload: %{speed_upload}B/s\n"
+```
+2. Random 5 MB buffer:
+```sh
+dd if=/dev/urandom bs=1m count=5 2>/dev/null | \
+curl -s -X POST "https://<your-worker>.workers.dev/upload" \
+  -H "x-api-probe-token:$API_PROBE_TOKEN" \
+  --data-binary @- -o /dev/null -w "Upload: %{speed_upload}B/s\n"
+```
+
+### 🔎 Edge & client info (`/info`)
+```sh
+curl -s https://<your-worker>.workers.dev/info | jq
+```
+
+### 📰 All request headers (`/headers`)
+```sh
+curl -s https://<your-worker>.workers.dev/headers | jq
+```
+
+### 🛠  Worker version (`/version`)
+```sh
+curl -s https://<your-worker>.workers.dev/version | jq
+```
+
+### 🔁 Echo service (`/echo`)
+```sh
+curl -s -X POST https://<your-worker>.workers.dev/echo \
+  -H "x-api-probe-token:$API_PROBE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"hello":"world"}' | jq
+```
+
 After deployment, access the endpoints via your worker URL. For example:
 ```sh
-curl https://<your-worker>.workers.dev/ping
+# Get metadata (no large download)
+curl -s "https://<your-worker>.workers.dev/speed?size=5000000&pattern=rand&meta" | jq
+
+# Run speed test and measure Mbps (requires bc)
+speed_bps=$(curl -s -H "x-api-probe-token:$API_PROBE_TOKEN" \
+  "https://<your-worker>.workers.dev/speed?size=5000000&pattern=rand" \
+  -o /dev/null -w "%{speed_download}")
+
+echo "Mbps: $(echo "scale=2; $speed_bps*8/1000000" | bc)"
+```
+
+### Upload speed test
+```sh
+dd if=/dev/zero bs=1m count=10 2>/dev/null | \
+curl -s -X POST "https://<your-worker>.workers.dev/upload" \
+  -H "x-api-probe-token:$API_PROBE_TOKEN" \
+  --data-binary @- -o /dev/null -w "upload=%{speed_upload}B/s\n"
 ```

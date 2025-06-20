@@ -7,13 +7,6 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-env:
-  CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-  CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-  RATE_LIMIT_KV_ID: ${{ secrets.RATE_LIMIT_KV_ID }}
-  API_PROBE_TOKEN: ${{ secrets.API_PROBE_TOKEN }}
-  ZONE_ID: ${{ secrets.ZONE_ID }}
-  PROBE_DOMAIN: ${{ secrets.PROBE_DOMAIN }}
 
 jobs:
   deploy:
@@ -29,14 +22,23 @@ jobs:
         with:
           node-version: '24.x'
 
-      - name: Generate wrangler.toml from template
+      - name: Generate metadata
+        id: meta
         run: |
-          cat wrangler.toml.template \
-            | sed "s|\${CF_ACCOUNT_ID}|${{ secrets.CF_ACCOUNT_ID }}|g" \
-            | sed "s|\${RATE_LIMIT_KV_ID}|${{ secrets.RATE_LIMIT_KV_ID }}|g" \
-            | sed "s|\${ZONE_ID}|${{ secrets.ZONE_ID }}|g" \
-            | sed "s|\${PROBE_DOMAIN}|${{ secrets.PROBE_DOMAIN }}|g" \
-            > wrangler.toml
+          echo "short_sha=$(git rev-parse --short $GITHUB_SHA)" >> $GITHUB_OUTPUT
+          echo "build_date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
+
+      - name: Generate wrangler.toml from template
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          RATE_LIMIT_KV_ID: ${{ secrets.RATE_LIMIT_KV_ID }}
+          ZONE_ID: ${{ secrets.ZONE_ID }}
+          PROBE_DOMAIN: ${{ secrets.PROBE_DOMAIN }}
+          API_PROBE_TOKEN: ${{ secrets.API_PROBE_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+          GIT_COMMIT: ${{ steps.meta.outputs.short_sha }}
+          BUILD_TIME: ${{ steps.meta.outputs.build_date }}
+        run: envsubst < wrangler.toml.template > wrangler.toml
 
       - name: Install Dependencies
         run: npm install
@@ -57,6 +59,6 @@ jobs:
           command: deploy
           environment: 'production'
         env:
-          RATE_LIMIT_KV_ID: ${{ secrets.RATE_LIMIT_KV_ID }}
-          API_PROBE_TOKEN: ${{ secrets.API_PROBE_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+
+
