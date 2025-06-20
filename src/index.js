@@ -265,8 +265,13 @@ const workerFetch = async (request, env, ctx) => {
   );
 };
 
-// Export the fetch handler directly for testing
-export default workerFetch;
+// Export the fetch handler in a way that's compatible with Wrangler
+const worker = {
+  fetch: workerFetch,
+};
+
+export default worker;
+// Keep the named export for testing
 export { workerFetch };
 
 // Register event handler for production

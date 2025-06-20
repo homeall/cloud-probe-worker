@@ -5,7 +5,7 @@ async function main() {
   // Import the worker fetch function
   try {
     console.log('Importing worker fetch from src/index.js...');
-    const { default: workerFetch } = await import('../src/index.js');
+    const { workerFetch } = await import('../src/index.js');
     if (!workerFetch) throw new Error('Could not find worker fetch function in module exports');
     console.log('Successfully imported worker fetch function');
 
