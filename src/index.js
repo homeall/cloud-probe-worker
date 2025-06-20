@@ -87,15 +87,70 @@ function createSecureResponse(body, options = {}) {
   });
 }
 
+/**
+ * Extracts Cloudflare-specific metadata from the provided request.
+ * @param {Request} request - The incoming request object.
+ * @return {object} An object containing Cloudflare metadata and request info.
+ */
+const getCloudflareMetadata = (request) => {
+  const cf = request.cf || {};
+  return {
+    ip: request.headers.get("cf-connecting-ip") || null,
+    asn: cf.asn || null,
+    city: cf.city || null,
+    region: cf.region || null,
+    country: cf.country || null,
+    latitude: cf.latitude || null,
+    longitude: cf.longitude || null,
+    timezone: cf.timezone || null,
+    colo: cf.colo || null,
+    user_agent: request.headers.get("user-agent") || null,
+    traceparent: request.headers.get("traceparent") || null,
+  };
+};
+
+// Constants
 const EXPENSIVE = ["/speed", "/upload", "/echo"];
 const FREE_LIMITED = ["/ping", "/info", "/healthz", "/headers", "/version"];
-const RATE_LIMIT = 30; /**
- * Extracts Cloudflare-specific metadata from the provided `cf` object.
- * @param {object} cf - The Cloudflare metadata object from the request.
- * @return {object} An object containing colo, country, ASN, region, city, latitude, longitude, and timezone information.
- */
+const RATE_LIMIT = 30;
 
-export async function fetch(request, env, ctx) {
+// Handle rate limiting
+const handleRateLimiting = async (path, ip, env, ctx) => {
+  if (FREE_LIMITED.includes(path) && env.RATE_LIMIT_KV) {
+    const now = Math.floor(Date.now() / 60000); // current minute
+    const kvKey = `rl:${ip}:${path}:${now}`;
+    let count = parseInt(await env.RATE_LIMIT_KV.get(kvKey)) || 0;
+    if (count >= RATE_LIMIT) {
+      return {
+        error: true,
+        response: createSecureResponse(
+          { error: "Too Many Requests" },
+          { status: 429, headers: new Headers({ 'content-type': 'application/json' }) }
+        )
+      };
+    }
+    ctx.waitUntil(env.RATE_LIMIT_KV.put(kvKey, (count + 1).toString(), { expirationTtl: 120 }));
+  }
+  return { error: false };
+};
+
+// Handle authentication
+const handleAuthentication = (path, token, validToken) => {
+  if (EXPENSIVE.includes(path)) {
+    if (!token || token !== validToken) {
+      return {
+        error: true,
+        response: createSecureResponse(
+          { error: "Unauthorized: missing or invalid token" },
+          { status: 401, headers: new Headers({ 'content-type': 'application/json' }) }
+        )
+      };
+    }
+  }
+  return { error: false };
+};
+
+const workerFetch = async (request, env, ctx) => {
   const url = new URL(request.url);
   const path = url.pathname;
   const token = request.headers.get("x-api-probe-token") || "";
@@ -103,120 +158,119 @@ export async function fetch(request, env, ctx) {
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   const headers = new Headers();
 
+  // Handle authentication
+  const authResult = handleAuthentication(path, token, validToken);
+  if (authResult.error) return authResult.response;
+
+  // Handle rate limiting
+  const rateLimitResult = await handleRateLimiting(path, ip, env, ctx);
+  if (rateLimitResult.error) return rateLimitResult.response;
+
   // Echo traceparent header if present
   const traceparent = request.headers.get("traceparent");
   if (traceparent) {
     headers.set("traceparent", traceparent);
   }
 
-  // --- PROTECTION LOGIC ---
-  if (EXPENSIVE.includes(path)) {
-    if (!token || token !== validToken) {
-      return createSecureResponse(
-        { error: "Unauthorized: missing or invalid token" },
-        { status: 401, headers: new Headers({ 'content-type': 'application/json' }) }
-      );
-    }
-  }
+  // Handle endpoints
+  switch (path) {
+    case "/ping":
+      if (request.method === "GET") {
+        return createSecureResponse({
+          timestamp: new Date().toISOString(),
+          cf: request.cf
+        }, { headers });
+      }
+      break;
 
-  // --- RATE LIMITING ---
-  if (FREE_LIMITED.includes(path)) {
-    if (env.RATE_LIMIT_KV) {
-      const now = Math.floor(Date.now() / 60000); // current minute
-      const kvKey = `rl:${ip}:${path}:${now}`;
-      let count = parseInt(await env.RATE_LIMIT_KV.get(kvKey)) || 0;
-      if (count >= RATE_LIMIT) {
+    case "/info":
+      if (request.method === "GET") {
         return createSecureResponse(
-          { error: "Too Many Requests" },
-          { status: 429, headers: new Headers({ 'content-type': 'application/json' }) }
+          getCloudflareMetadata(request),
+          { headers: new Headers({ 'content-type': 'application/json' }) }
         );
       }
-      ctx.waitUntil(env.RATE_LIMIT_KV.put(kvKey, (count + 1).toString(), { expirationTtl: 120 }));
-    }
-  }
+      break;
 
-  // --- ENDPOINTS ---
-  // /ping
-  if (path === "/ping" && request.method === "GET") {
-    return createSecureResponse({
-      timestamp: new Date().toISOString(),
-      cf: request.cf
-    }, { headers });
-  }
+    case "/headers":
+      if (request.method === "GET") {
+        const allHeaders = Object.fromEntries(request.headers.entries());
+        return createSecureResponse(
+          { headers: allHeaders, traceparent: traceparent || null },
+          { headers: new Headers({ 'content-type': 'application/json' }) }
+        );
+      }
+      break;
 
-  // /info
-  if (path === "/info" && request.method === "GET") {
-        const cf = request.cf || {};
+    case "/version":
+      if (request.method === "GET") {
         return createSecureResponse(
           {
-            ip: request.headers.get("cf-connecting-ip") || null,
-            asn: cf.asn || null,
-            city: cf.city || null,
-            region: cf.region || null,
-            country: cf.country || null,
-            latitude: cf.latitude || null,
-            longitude: cf.longitude || null,
-            timezone: cf.timezone || null,
-            colo: cf.colo || null,
-            user_agent: request.headers.get("user-agent") || null,
+            version: VERSION,
+            commit: GIT_COMMIT,
+            build: BUILD_TIME,
+          },
+          { headers: new Headers({ 'content-type': 'application/json' }) }
+        );
+      }
+      break;
+
+    case "/echo":
+      if (request.method === "POST") {
+        const reqBody = await request.text();
+        const allHeaders = Object.fromEntries(request.headers.entries());
+        return createSecureResponse(
+          {
+            body: reqBody,
+            headers: allHeaders,
             traceparent: traceparent || null,
           },
           { headers: new Headers({ 'content-type': 'application/json' }) }
         );
-    }
-
-    // /headers
-    if (path === "/headers" && request.method === "GET") {
-      let allHeaders = {};
-      for (let [key, value] of request.headers.entries()) {
-        allHeaders[key] = value;
       }
-      return createSecureResponse(
-        { headers: allHeaders, traceparent: traceparent || null },
-        { headers: new Headers({ 'content-type': 'application/json' }) }
-      );
-    }
+      break;
 
-    // /version
-    if (path === "/version" && request.method === "GET") {
-      return createSecureResponse(
-        {
-          version: VERSION,
-          commit: GIT_COMMIT,
-          build: BUILD_TIME,
-        },
-        { headers: new Headers({ 'content-type': 'application/json' }) }
-      );
-    }
-
-    // /echo
-    if (path === "/echo" && request.method === "POST") {
-      const reqBody = await request.text();
-      let allHeaders = {};
-      for (let [key, value] of request.headers.entries()) {
-        allHeaders[key] = value;
+    case "/speed":
+      if (request.method === "GET") {
+        const size = parseInt(request.url.split('?')[1]?.split('=')[1]) || 1000;
+        const data = new Uint8Array(size).fill(42);
+        return createSecureResponse(data, {
+          status: 200,
+          headers: new Headers({
+            'content-type': 'application/octet-stream',
+            'content-length': size.toString()
+          })
+        });
       }
-      return createSecureResponse(
-        {
-          echoed: reqBody,
-          headers: allHeaders,
-          traceparent: traceparent || null,
-        },
-        { headers: new Headers({ 'content-type': 'application/json' }) }
-      );
-    }
+      break;
 
-    // /healthz
-    if (path === "/healthz" && request.method === "GET") {
-      return createSecureResponse(
-        { status: "ok" },
-        { headers: new Headers({ 'content-type': 'application/json' }) }
-      );
-    }
-
-    // Default: ok
-    return createSecureResponse("ok", { 
-      headers: new Headers({ 'content-type': 'text/plain' }) 
-    });
+    case "/upload":
+      if (request.method === "POST") {
+        const body = await request.arrayBuffer();
+        return createSecureResponse(
+          {
+            size: body.byteLength,
+            headers: Object.fromEntries(request.headers.entries()),
+            traceparent: traceparent || null
+          },
+          { headers: new Headers({ 'content-type': 'application/json' }) }
+        );
+      }
+      break;
+    } // This brace closes the case block
   }
+
+  // Default: 404
+  return createSecureResponse(
+    { error: "Not Found" },
+    { status: 404, headers: new Headers({ 'content-type': 'application/json' }) }
+  );
+};
+
+addEventListener('fetch', event => {
+  event.respondWith(workerFetch(event.request, event.env, event.ctx))
+});
+
+export default workerFetch;
+export { workerFetch };
 
