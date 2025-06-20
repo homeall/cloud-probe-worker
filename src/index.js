@@ -8,7 +8,7 @@ const DEFAULT_BUILD_TIME = new Date().toISOString().split('T')[0];
  * Adds a comprehensive set of security headers to the provided Headers object.
  * The headers enforce HTTPS, prevent MIME sniffing and clickjacking, restrict referrer information,
  * disable legacy XSS protection, prevent caching, and limit certain browser permissions.
- * 
+ *
  * @param {Headers} headers - The Headers object to which security headers will be added.
  * @returns {Headers} The Headers object with security headers applied.
  */
@@ -30,7 +30,7 @@ const addSecurityHeaders = (headers) => {
  * If the body is an object, it is JSON-stringified; otherwise, it is used as-is.
  * Security headers are added to enforce HTTPS, prevent MIME sniffing, clickjacking, and caching.
  * The default content type is set to "text/plain" unless specified in options.
- * 
+ *
  * @param {string|object} body - The response body, either as a string or an object to be JSON-stringified.
  * @param {object} [options] - Optional response settings, including status and headers.
  * @returns {Response} The constructed HTTP response with security headers.
@@ -38,6 +38,14 @@ const addSecurityHeaders = (headers) => {
 const createSecureResponse = (body, options = {}) => {
   const headers = new Headers(options.headers || {});
   addSecurityHeaders(headers);
+
+  // If body is binary data (ArrayBuffer or any TypedArray), return as-is
+  if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+    if (!headers.has('content-type')) {
+      headers.set('content-type', 'application/octet-stream');
+    }
+    return new Response(body, { ...options, headers });
+  }
 
   if (typeof body === 'object') {
     headers.set('content-type', options.headers?.['content-type'] || 'application/json');
@@ -140,7 +148,7 @@ const workerFetch = async (request, env, ctx) => {
   if (authResult.error) return authResult.response;
 
   // Handle rate limiting
-  const rateLimitResult = await handleRateLimiting(path, ip, env, ctx);
+  const rateLimitResult = await handleRateLimiting(path, ip, env);
   if (rateLimitResult.error) return rateLimitResult.response;
 
   // Echo traceparent header if present
