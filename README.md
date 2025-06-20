@@ -120,3 +120,11 @@ speed_bps=$(curl -s -H "x-api-probe-token:$API_PROBE_TOKEN" \
 
 echo "Mbps: $(echo "scale=2; $speed_bps*8/1000000" | bc)"
 ```
+
+### Upload speed test
+```sh
+dd if=/dev/zero bs=1m count=10 2>/dev/null | \
+curl -s -X POST "https://<your-worker>.workers.dev/upload" \
+  -H "x-api-probe-token:$API_PROBE_TOKEN" \
+  --data-binary @- -o /dev/null -w "upload=%{speed_upload}B/s\n"
+```
