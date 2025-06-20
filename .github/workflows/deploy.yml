@@ -53,5 +53,7 @@ jobs:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           command: deploy
           environment: 'production'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
 
 
