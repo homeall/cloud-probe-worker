@@ -95,18 +95,19 @@ const RATE_LIMIT = 30; /**
  * @return {object} An object containing colo, country, ASN, region, city, latitude, longitude, and timezone information.
  */
 
-export async function fetch(request, env, ctx) {
-  const url = new URL(request.url);
-  const path = url.pathname;
-  const token = request.headers.get("x-api-probe-token") || "";
-  const validToken = env.API_PROBE_TOKEN;
-  const ip = request.headers.get("cf-connecting-ip") || "unknown";
-  const headers = new Headers();
-
-  // Echo traceparent header if present
-  const traceparent = request.headers.get("traceparent");
-  if (traceparent) {
-    headers.set("traceparent", traceparent);
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const path = url.pathname;
+    const token = request.headers.get("x-api-probe-token") || "";
+    const validToken = env.API_PROBE_TOKEN;
+    const ip = request.headers.get("cf-connecting-ip") || "unknown";
+    const headers = new Headers();
+  
+    // Echo traceparent header if present
+    const traceparent = request.headers.get("traceparent");
+    if (traceparent) {
+      headers.set("traceparent", traceparent);
   }
 
   // --- PROTECTION LOGIC ---
