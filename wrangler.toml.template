@@ -17,7 +17,7 @@ id = "${RATE_LIMIT_KV_ID}"
 workers_dev = false
 zone_id = "${ZONE_ID}"
 routes = [
-  { pattern = "${PROBE_DOMAIN}/*", custom_domain = true }
+  { pattern = "${PROBE_DOMAIN}", custom_domain = true }
 ]
 
   [[env.production.kv_namespaces]]
