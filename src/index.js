@@ -263,7 +263,7 @@ const workerFetch = async (request, env) => {
           case 'rand':
             buffer = new Uint8Array(sizeParam);
             // Cloudflare crypto.getRandomValues max 65536 bytes per call
-            const CHUNK = 65536;
+            var CHUNK = 65536;
             for (let offset = 0; offset < sizeParam; offset += CHUNK) {
               crypto.getRandomValues(buffer.subarray(offset, Math.min(offset + CHUNK, sizeParam)));
             }
